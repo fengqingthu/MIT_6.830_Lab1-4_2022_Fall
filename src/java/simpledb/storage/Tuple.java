@@ -13,6 +13,9 @@ public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private TupleDesc schema;
+    private Field[] fields;
+
     /**
      * Create a new tuple with the specified schema (type).
      *
@@ -20,15 +23,15 @@ public class Tuple implements Serializable {
      *           instance with at least one field.
      */
     public Tuple(TupleDesc td) {
-        // TODO: some code goes here
+        this.schema = td;
+        this.fields = new Field[td.numFields()];
     }
 
     /**
      * @return The TupleDesc representing the schema of this tuple.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return this.schema;
     }
 
     /**
@@ -56,7 +59,7 @@ public class Tuple implements Serializable {
      * @param f new value for the field.
      */
     public void setField(int i, Field f) {
-        // TODO: some code goes here
+        this.fields[i] = f;
     }
 
     /**
@@ -64,8 +67,7 @@ public class Tuple implements Serializable {
      * @return the value of the ith field, or null if it has not been set.
      */
     public Field getField(int i) {
-        // TODO: some code goes here
-        return null;
+        return this.fields[i];
     }
 
     /**
@@ -77,22 +79,25 @@ public class Tuple implements Serializable {
      * where \t is any whitespace (except a newline)
      */
     public String toString() {
-        // TODO: some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        String res = "";
+        for (int i = 0; i < this.fields.length - 1; i++) {
+            res += this.fields[i].toString() + " ";
+        }
+        res += this.fields[this.fields.length - 1].toString();
+        return res;
     }
 
     /**
      * @return An iterator which iterates over all the fields of this tuple
      */
     public Iterator<Field> fields() {
-        // TODO: some code goes here
-        return null;
+        return Arrays.stream(this.fields).iterator();
     }
 
     /**
      * reset the TupleDesc of this tuple (only affecting the TupleDesc)
      */
     public void resetTupleDesc(TupleDesc td) {
-        // TODO: some code goes here
+        this.schema = td;
     }
 }
