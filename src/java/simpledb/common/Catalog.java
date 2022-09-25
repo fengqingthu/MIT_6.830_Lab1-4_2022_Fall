@@ -22,26 +22,49 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    private HashMap<Integer, DbFile> idToDbFile;
+    private HashMap<Integer, String> idToName;
+    private HashMap<Integer, String> idToPkey;
+    private HashMap<String, Integer> nameToId;
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        // TODO: some code goes here
+        this.idToDbFile = new HashMap<Integer, DbFile>();
+        this.idToName = new HashMap<Integer, String>();
+        this.idToPkey = new HashMap<Integer, String>();
+        this.nameToId = new HashMap<String, Integer>();
     }
 
     /**
      * Add a new table to the catalog.
      * This table's contents are stored in the specified DbFile.
      *
-     * @param file      the contents of the table to add;  file.getId() is the identfier of
-     *                  this file/tupledesc param for the calls getTupleDesc and getFile
-     * @param name      the name of the table -- may be an empty string.  May not be null.  If a name
-     *                  conflict exists, use the last table to be added as the table for a given name.
+     * @param file      the contents of the table to add; file.getId() is the
+     *                  identfier of
+     *                  this file/tupledesc param for the calls getTupleDesc and
+     *                  getFile
+     * @param name      the name of the table -- may be an empty string. May not be
+     *                  null. If a name
+     *                  conflict exists, use the last table to be added as the table
+     *                  for a given name.
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
-        // TODO: some code goes here
+        int id = file.getId();
+        /* Remove the old table if a name conflict exists. */
+        if (this.nameToId.containsKey(name)) {
+            int oldId = this.nameToId.get(name);
+            this.idToDbFile.remove(oldId);
+            this.idToName.remove(oldId);
+            this.idToPkey.remove(oldId);
+        }
+        this.nameToId.put(name, id);
+        this.idToDbFile.put(id, file);
+        this.idToName.put(id, name);
+        this.idToPkey.put(id, pkeyField);
     }
 
     public void addTable(DbFile file, String name) {
@@ -53,7 +76,8 @@ public class Catalog {
      * This table has tuples formatted using the specified TupleDesc and its
      * contents are stored in the specified DbFile.
      *
-     * @param file the contents of the table to add;  file.getId() is the identfier of
+     * @param file the contents of the table to add; file.getId() is the identfier
+     *             of
      *             this file/tupledesc param for the calls getTupleDesc and getFile
      */
     public void addTable(DbFile file) {
@@ -66,8 +90,10 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
-        // TODO: some code goes here
-        return 0;
+        Integer id = this.nameToId.get(name);
+        if (id == null)
+            throw new NoSuchElementException(String.format("Cannot find table %s in the catalog\n", name));
+        return id;
     }
 
     /**
@@ -78,8 +104,10 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        DbFile table = this.idToDbFile.get(tableid);
+        if (table == null)
+            throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
+        return table.getTupleDesc();
     }
 
     /**
@@ -90,34 +118,43 @@ public class Catalog {
      *                function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        DbFile table = this.idToDbFile.get(tableid);
+        if (table == null)
+            throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
+        return table;
     }
 
     public String getPrimaryKey(int tableid) {
-        // TODO: some code goes here
-        return null;
+        String pkey = this.idToPkey.get(tableid);
+        if (pkey == null)
+            throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
+        return pkey;
     }
 
     public Iterator<Integer> tableIdIterator() {
-        // TODO: some code goes here
-        return null;
+        return this.idToDbFile.keySet().iterator();
     }
 
-    public String getTableName(int id) {
-        // TODO: some code goes here
-        return null;
+    public String getTableName(int tableid) {
+        String name = this.idToName.get(tableid);
+        if (name == null)
+            throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
+        return name;
     }
 
     /**
      * Delete all tables from the catalog
      */
     public void clear() {
-        // TODO: some code goes here
+        this.idToDbFile.clear();
+        this.idToName.clear();
+        this.idToPkey.clear();
+        this.nameToId.clear();
     }
 
     /**
-     * Reads the schema from a file and creates the appropriate tables in the database.
+     * Reads the schema from a file and creates the appropriate tables in the
+     * database.
      *
      * @param catalogFile
      */
@@ -128,9 +165,9 @@ public class Catalog {
             BufferedReader br = new BufferedReader(new FileReader(catalogFile));
 
             while ((line = br.readLine()) != null) {
-                //assume line is of the format name (field type, field type, ...)
+                // assume line is of the format name (field type, field type, ...)
                 String name = line.substring(0, line.indexOf("(")).trim();
-                //System.out.println("TABLE NAME: " + name);
+                // System.out.println("TABLE NAME: " + name);
                 String fields = line.substring(line.indexOf("(") + 1, line.indexOf(")")).trim();
                 String[] els = fields.split(",");
                 List<String> names = new ArrayList<>();
@@ -172,4 +209,3 @@ public class Catalog {
         }
     }
 }
-
