@@ -9,7 +9,7 @@ import simpledb.common.Permissions;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
-/* An iterator that wraps a heap file with its pages. */
+/* An iterator implementing DbFileIterator that wraps upon a heap file to output its tuples. */
 public class HeapFileIterator implements DbFileIterator {
     private final HeapFile hf;
     private final TransactionId tid;

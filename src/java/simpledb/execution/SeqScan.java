@@ -3,6 +3,7 @@ package simpledb.execution;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Type;
+import simpledb.storage.DbFile;
 import simpledb.storage.DbFileIterator;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
@@ -10,6 +11,8 @@ import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.util.NoSuchElementException;
+
+import javax.xml.crypto.Data;
 
 /**
  * SeqScan is an implementation of a sequential scan access method that reads
@@ -19,6 +22,10 @@ import java.util.NoSuchElementException;
 public class SeqScan implements OpIterator {
 
     private static final long serialVersionUID = 1L;
+    private final TransactionId tid;
+    private int tableid;
+    private String tableAlias;
+    private DbFileIterator iter;
 
     /**
      * Creates a sequential scan over the specified table as a part of the
@@ -34,7 +41,10 @@ public class SeqScan implements OpIterator {
      *                   tableAlias.null, or null.null).
      */
     public SeqScan(TransactionId tid, int tableid, String tableAlias) {
-        // TODO: some code goes here
+        this.tid = tid;
+        this.tableid = tableid;
+        this.tableAlias = tableAlias;
+        this.iter = Database.getCatalog().getDatabaseFile(tableid).iterator(tid);
     }
 
     /**
@@ -42,15 +52,14 @@ public class SeqScan implements OpIterator {
      *         be the actual name of the table in the catalog of the database
      */
     public String getTableName() {
-        return null;
+        return Database.getCatalog().getTableName(this.tableid);
     }
 
     /**
      * @return Return the alias of the table this operator scans.
      */
     public String getAlias() {
-        // TODO: some code goes here
-        return null;
+        return this.tableAlias;
     }
 
     /**
@@ -65,7 +74,9 @@ public class SeqScan implements OpIterator {
      *                   tableAlias.null, or null.null).
      */
     public void reset(int tableid, String tableAlias) {
-        // TODO: some code goes here
+        this.tableid = tableid;
+        this.tableAlias = tableAlias;
+        this.iter = Database.getCatalog().getDatabaseFile(tableid).iterator(tid);
     }
 
     public SeqScan(TransactionId tid, int tableId) {
@@ -73,7 +84,7 @@ public class SeqScan implements OpIterator {
     }
 
     public void open() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        this.iter.open();
     }
 
     /**
@@ -87,27 +98,38 @@ public class SeqScan implements OpIterator {
      *         prefixed with the tableAlias string from the constructor.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        String prefix;
+        if (this.tableAlias != null) {
+            prefix = this.tableAlias;
+        } else {
+            prefix = "null";
+        }
+        TupleDesc schema = Database.getCatalog().getTupleDesc(this.tableid);
+        int n = schema.numFields();
+        Type[] fieldType = new Type[n];
+        String[] fieldName = new String[n];
+        for (int i = 0; i < n; i++) {
+            fieldType[i] = schema.getFieldType(i);
+            fieldName[i] = prefix + "." + schema.getFieldName(i);
+        }
+        return new TupleDesc(fieldType, fieldName);
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return false;
+        return this.iter.hasNext();
     }
 
     public Tuple next() throws NoSuchElementException,
             TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        return this.iter.next();
     }
 
     public void close() {
-        // TODO: some code goes here
+        this.iter.close();
     }
 
     public void rewind() throws DbException, NoSuchElementException,
             TransactionAbortedException {
-        // TODO: some code goes here
+        this.iter.rewind();
     }
 }
