@@ -96,7 +96,7 @@ public class HeapPage implements Page {
      *         tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {
-        return (int) Math.ceil(this.td.getSize() / 8f);
+        return (int) Math.ceil(this.getNumTuples() / 8f);
     }
 
     /**
@@ -323,10 +323,8 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // Assuming valid input i
-        byte b = this.header[(int) Math.floor(i / 4f)];
-        if (((b >> (i - (int) Math.floor(i / 4f))) & 1) == 1)
-            return true;
-        return false;
+        byte b = this.header[(int) Math.floor(i / 8f)];
+        return ((b >> (i % 8)) & 1) == 1;
     }
 
     /**

@@ -13,6 +13,7 @@ import java.util.NoSuchElementException;
 public class TupleDesc implements Serializable {
 
     private final TDItem[] fields;
+    private final int size;
 
     /**
      * A help class to facilitate organizing the information of each field
@@ -66,13 +67,16 @@ public class TupleDesc implements Serializable {
          * we pad nulls names.
          */
         this.fields = new TDItem[typeAr.length];
+        int sum = 0;
         for (int i = 0; i < typeAr.length; i++) {
             if (i >= fieldAr.length) {
                 this.fields[i] = new TDItem(typeAr[i], null);
             } else {
                 this.fields[i] = new TDItem(typeAr[i], fieldAr[i]);
             }
+            sum += typeAr[i].getLen();
         }
+        this.size = sum;
     }
 
     /**
@@ -84,8 +88,12 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         this.fields = new TDItem[typeAr.length];
-        for (int i = 0; i < typeAr.length; i++)
+        int sum = 0;
+        for (int i = 0; i < typeAr.length; i++) {
             this.fields[i] = new TDItem(typeAr[i], null);
+            sum += typeAr[i].getLen();
+        }
+        this.size = sum;
     }
 
     /**
@@ -148,11 +156,7 @@ public class TupleDesc implements Serializable {
      *         Note that tuples from a given TupleDesc are of a fixed size.
      */
     public int getSize() {
-        int res = 0;
-        for (int i = 0; i < this.fields.length; i++) {
-            res += this.fields[i].fieldType.getLen();
-        }
-        return res;
+        return this.size;
     }
 
     /**
