@@ -7,6 +7,7 @@ import simpledb.common.Debug;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -24,6 +25,11 @@ public class HeapPage implements Page {
     final byte[] header;
     final Tuple[] tuples;
     final int numSlots;
+    /*
+     * This numUnusedSlots variable should be updated when insert or delete tuples
+     * from this page so that getNumUnusedSlots runs in amortized constant time.
+     */
+    private int numUnusedSlots;
 
     byte[] oldData;
     private final Byte oldDataLock = (byte) 0;
@@ -32,9 +38,11 @@ public class HeapPage implements Page {
      * Create a HeapPage from a set of bytes of data read from disk.
      * The format of a HeapPage is a set of header bytes indicating
      * the slots of the page that are in use, some number of tuple slots.
-     * Specifically, the number of tuples is equal to: <p>
+     * Specifically, the number of tuples is equal to:
+     * <p>
      * floor((BufferPool.getPageSize()*8) / (tuple size * 8 + 1))
-     * <p> where tuple size is the size of tuples in this
+     * <p>
+     * where tuple size is the size of tuples in this
      * database table, which can be determined via {@link Catalog#getTupleDesc}.
      * The number of 8-bit header words is equal to:
      * <p>
@@ -56,6 +64,8 @@ public class HeapPage implements Page {
         for (int i = 0; i < header.length; i++)
             header[i] = dis.readByte();
 
+        this.updateNumUnusedSlots();
+
         tuples = new Tuple[numSlots];
         try {
             // allocate and read the actual records of this page
@@ -75,21 +85,18 @@ public class HeapPage implements Page {
      * @return the number of tuples on this page
      */
     private int getNumTuples() {
-        // TODO: some code goes here
-        return 0;
-
+        return (int) Math.floor((BufferPool.getPageSize() * 8f) / (this.td.getSize() * 8f + 1f));
     }
 
     /**
-     * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
+     * Computes the number of bytes in the header of a page in a HeapFile with each
+     * tuple occupying tupleSize bytes
      *
-     * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
+     * @return the number of bytes in the header of a page in a HeapFile with each
+     *         tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {
-
-        // TODO: some code goes here
-        return 0;
-
+        return (int) Math.ceil(this.td.getSize() / 8f);
     }
 
     /**
@@ -105,7 +112,7 @@ public class HeapPage implements Page {
             return new HeapPage(pid, oldDataRef);
         } catch (IOException e) {
             e.printStackTrace();
-            //should never happen -- we parsed it OK before!
+            // should never happen -- we parsed it OK before!
             System.exit(1);
         }
         return null;
@@ -121,8 +128,7 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-        // TODO: some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return this.pid;
     }
 
     /**
@@ -214,7 +220,8 @@ public class HeapPage implements Page {
         }
 
         // padding
-        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); //- numSlots * td.getSize();
+        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); 
+        // - numSlots * td.getSize();
         byte[] zeroes = new byte[zerolen];
         try {
             dos.write(zeroes, 0, zerolen);
@@ -242,11 +249,12 @@ public class HeapPage implements Page {
      */
     public static byte[] createEmptyPageData() {
         int len = BufferPool.getPageSize();
-        return new byte[len]; //all 0
+        return new byte[len]; // all 0
     }
 
     /**
-     * Delete the specified tuple from the page; the corresponding header bit should be updated to reflect
+     * Delete the specified tuple from the page; the corresponding header bit should
+     * be updated to reflect
      * that it is no longer stored on any page.
      *
      * @param t The tuple to delete
@@ -259,7 +267,7 @@ public class HeapPage implements Page {
     }
 
     /**
-     * Adds the specified tuple to the page;  the tuple should be updated to reflect
+     * Adds the specified tuple to the page; the tuple should be updated to reflect
      * that it is now stored on this page.
      *
      * @param t The tuple to add.
@@ -281,27 +289,43 @@ public class HeapPage implements Page {
     }
 
     /**
-     * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
+     * Returns the tid of the transaction that last dirtied this page, or null if
+     * the page is not dirty
      */
     public TransactionId isDirty() {
         // TODO: some code goes here
         // Not necessary for lab1
-        return null;      
+        return null;
     }
 
     /**
      * Returns the number of unused (i.e., empty) slots on this page.
      */
     public int getNumUnusedSlots() {
-        // TODO: some code goes here
-        return 0;
+        return this.numUnusedSlots;
+    }
+
+    /*
+     * Helper method that actually iterates over the header and re-calculates the
+     * number of unused slots inside this page.
+     */
+    private void updateNumUnusedSlots() {
+        int res = 0;
+        for (int i = 0; i < this.numSlots; i++) {
+            if (!this.isSlotUsed(i))
+                res++;
+        }
+        this.numUnusedSlots = res;
     }
 
     /**
      * Returns true if associated slot on this page is filled.
      */
     public boolean isSlotUsed(int i) {
-        // TODO: some code goes here
+        // Assuming valid input i
+        byte b = this.header[(int) Math.floor(i / 4f)];
+        if (((b >> (i - (int) Math.floor(i / 4f))) & 1) == 1)
+            return true;
         return false;
     }
 
@@ -314,13 +338,11 @@ public class HeapPage implements Page {
     }
 
     /**
-     * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
+     * @return an iterator over all tuples on this page (calling remove on this
+     *         iterator throws an UnsupportedOperationException)
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        // TODO: some code goes here
-        return null;
+        return Arrays.stream(this.tuples).filter(s -> s != null).iterator();
     }
-
 }
-

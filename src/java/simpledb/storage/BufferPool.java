@@ -31,6 +31,9 @@ public class BufferPool {
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
 
+    private final int maxNumPages;
+    private HashMap<PageId, Page> pidToPage;
+
     /**
      * Default number of pages passed to the constructor. This is used by
      * other classes. BufferPool should use the numPages argument to the
@@ -44,7 +47,8 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-        // TODO: some code goes here
+        this.maxNumPages = numPages;
+        this.pidToPage = new HashMap<PageId, Page>();
     }
 
     public static int getPageSize() {
@@ -78,8 +82,21 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        Page page = this.pidToPage.get(pid);
+        if (page != null)
+            return page;
+        if (this.pidToPage.size() >= this.maxNumPages)
+            throw new DbException("BufferPool overflow\n");
+        /* Read the page from disk and add to buffer. */
+        try {
+            DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            page = table.readPage(pid);
+            this.pidToPage.put(pid, page);
+            return page;
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new DbException("Fail to load page from disk\n");
+        }
     }
 
     /**
