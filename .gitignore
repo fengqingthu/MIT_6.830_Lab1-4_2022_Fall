@@ -1,3 +1,7 @@
 bin*
+*.jar
 log
 .DS_STORE*
+*.dat
+*.txt
+*.zip
