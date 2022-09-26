@@ -89,8 +89,7 @@ public class BufferPool {
             throw new DbException("BufferPool overflow\n");
         /* Read the page from disk and add to buffer. */
         try {
-            DbFile table = Database.getCatalog().getDatabaseFile(pid.getTableId());
-            page = table.readPage(pid);
+            page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
             this.pidToPage.put(pid, page);
             return page;
         } catch (Exception e) {
