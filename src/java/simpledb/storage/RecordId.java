@@ -47,8 +47,12 @@ public class RecordId implements Serializable {
      */
     @Override
     public boolean equals(Object o) {
-        RecordId opposite = (RecordId) o;
-        return this.pid.equals(opposite.getPageId()) && this.tupleno == opposite.getTupleNumber();
+        try {
+            RecordId opposite = (RecordId) o;
+            return this.pid.equals(opposite.getPageId()) && this.tupleno == opposite.getTupleNumber();
+        } catch (Exception ignore) {
+            return false;
+        }
     }
 
     /**
