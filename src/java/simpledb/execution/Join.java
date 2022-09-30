@@ -1,10 +1,12 @@
 package simpledb.execution;
 
 import simpledb.common.DbException;
+import simpledb.common.Type;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
 
+import java.util.ArrayList;
 import java.util.NoSuchElementException;
 
 /**
@@ -13,6 +15,11 @@ import java.util.NoSuchElementException;
 public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
+    private final JoinPredicate p;
+    private final TupleDesc td;
+    private OpIterator child1;
+    private OpIterator child2;
+    private Tuple outer = null;
 
     /**
      * Constructor. Accepts two children to join and the predicate to join them
@@ -23,12 +30,17 @@ public class Join extends Operator {
      * @param child2 Iterator for the right(inner) relation to join
      */
     public Join(JoinPredicate p, OpIterator child1, OpIterator child2) {
-        // TODO: some code goes here
+        this.p = p;
+        this.child1 = child1;
+        this.child2 = child2;
+        /* Directly merge. */
+        this.td = TupleDesc.merge(
+                this.child1.getTupleDesc(),
+                this.child2.getTupleDesc());
     }
 
     public JoinPredicate getJoinPredicate() {
-        // TODO: some code goes here
-        return null;
+        return this.p;
     }
 
     /**
@@ -36,8 +48,7 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField1Name() {
-        // TODO: some code goes here
-        return null;
+        return this.child1.getTupleDesc().getFieldName(this.p.getField1());
     }
 
     /**
@@ -45,30 +56,34 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField2Name() {
-        // TODO: some code goes here
-        return null;
+        return this.child2.getTupleDesc().getFieldName(this.p.getField2());
     }
 
     /**
      * @see TupleDesc#merge(TupleDesc, TupleDesc) for possible
-     *         implementation logic.
+     *      implementation logic.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return this.td;
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
-        // TODO: some code goes here
+        child1.open();
+        child2.open();
+        super.open();
     }
 
     public void close() {
-        // TODO: some code goes here
+        super.close();
+        child1.close();
+        child2.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        this.outer = null;
+        child1.rewind();
+        child2.rewind();
     }
 
     /**
@@ -90,19 +105,52 @@ public class Join extends Operator {
      * @see JoinPredicate#filter
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        /* Initialize outer tuple on first call. */
+        if (this.outer == null) {
+            if (this.child1.hasNext())
+                this.outer = this.child1.next();
+            else
+                return null;
+        }
+        /* Search next match within current outer loop. */
+        Tuple inner;
+        while (child2.hasNext()) {
+            inner = child2.next();
+            if (this.p.filter(this.outer, inner)) {
+                /* Join two tuples. */
+                Tuple match = new Tuple(this.td);
+                for (int i = 0; i < outer.getTupleDesc().numFields(); i++) {
+                    match.setField(i, outer.getField(i));
+                }
+                int offset = outer.getTupleDesc().numFields();
+                for (int i = 0; i < inner.getTupleDesc().numFields(); i++) {
+                    match.setField(i + offset, inner.getField(i));
+                }
+                /*
+                 * How to set record ID?
+                 * For now, leave null unless explicitly materialized.
+                 */
+                return match;
+            }
+        }
+        /* Not found, rewind inner, increment outer and recurse. */
+        child2.rewind();
+        if (child1.hasNext())
+            this.outer = child1.next();
+        else
+            return null;
+        return this.fetchNext();
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return new OpIterator[] { this.child1, this.child2 };
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+        this.child1 = children[0];
+        this.child2 = children[1];
     }
 
 }
