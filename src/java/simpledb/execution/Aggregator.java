@@ -74,9 +74,9 @@ public interface Aggregator extends Serializable {
      * creates a new group aggregate result if the group value has not yet
      * been encountered.
      *
-     * @param tup the Tuple containing an aggregate field and a group-by field
+     * @param tu the Tuple containing an aggregate field and a group-by field
      */
-    void mergeTupleIntoGroup(Tuple tup);
+    void mergeTupleIntoGroup(Tuple tu);
 
     /**
      * Create a OpIterator over group aggregate results.
