@@ -47,8 +47,8 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-        this.maxNumPages = numPages;
-        this.pidToPage = new HashMap<PageId, Page>();
+        maxNumPages = numPages;
+        pidToPage = new HashMap<PageId, Page>();
     }
 
     public static int getPageSize() {
@@ -82,15 +82,15 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        Page page = this.pidToPage.get(pid);
+        Page page = pidToPage.get(pid);
         if (page != null)
             return page;
-        if (this.pidToPage.size() >= this.maxNumPages)
+        if (pidToPage.size() >= maxNumPages)
             throw new DbException("BufferPool overflow\n");
         /* Read the page from disk and add to buffer. */
         try {
             page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
-            this.pidToPage.put(pid, page);
+            pidToPage.put(pid, page);
             return page;
         } catch (Exception e) {
             e.printStackTrace();

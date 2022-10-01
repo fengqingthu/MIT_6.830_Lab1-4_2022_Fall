@@ -32,10 +32,10 @@ public class Catalog {
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        this.idToDbFile = new HashMap<Integer, DbFile>();
-        this.idToName = new HashMap<Integer, String>();
-        this.idToPkey = new HashMap<Integer, String>();
-        this.nameToId = new HashMap<String, Integer>();
+        idToDbFile = new HashMap<Integer, DbFile>();
+        idToName = new HashMap<Integer, String>();
+        idToPkey = new HashMap<Integer, String>();
+        nameToId = new HashMap<String, Integer>();
     }
 
     /**
@@ -55,16 +55,16 @@ public class Catalog {
     public void addTable(DbFile file, String name, String pkeyField) {
         int id = file.getId();
         /* Remove the old table if a name conflict exists. */
-        if (this.nameToId.containsKey(name)) {
-            int oldId = this.nameToId.get(name);
-            this.idToDbFile.remove(oldId);
-            this.idToName.remove(oldId);
-            this.idToPkey.remove(oldId);
+        if (nameToId.containsKey(name)) {
+            int oldId = nameToId.get(name);
+            idToDbFile.remove(oldId);
+            idToName.remove(oldId);
+            idToPkey.remove(oldId);
         }
-        this.nameToId.put(name, id);
-        this.idToDbFile.put(id, file);
-        this.idToName.put(id, name);
-        this.idToPkey.put(id, pkeyField);
+        nameToId.put(name, id);
+        idToDbFile.put(id, file);
+        idToName.put(id, name);
+        idToPkey.put(id, pkeyField);
     }
 
     public void addTable(DbFile file, String name) {
@@ -90,7 +90,7 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
-        Integer id = this.nameToId.get(name);
+        Integer id = nameToId.get(name);
         if (id == null)
             throw new NoSuchElementException(String.format("Cannot find table %s in the catalog\n", name));
         return id;
@@ -104,7 +104,7 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        DbFile table = this.idToDbFile.get(tableid);
+        DbFile table = idToDbFile.get(tableid);
         if (table == null)
             throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
         return table.getTupleDesc();
@@ -118,25 +118,25 @@ public class Catalog {
      *                function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-        DbFile table = this.idToDbFile.get(tableid);
+        DbFile table = idToDbFile.get(tableid);
         if (table == null)
             throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
         return table;
     }
 
     public String getPrimaryKey(int tableid) {
-        String pkey = this.idToPkey.get(tableid);
+        String pkey = idToPkey.get(tableid);
         if (pkey == null)
             throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
         return pkey;
     }
 
     public Iterator<Integer> tableIdIterator() {
-        return this.idToDbFile.keySet().iterator();
+        return idToDbFile.keySet().iterator();
     }
 
     public String getTableName(int tableid) {
-        String name = this.idToName.get(tableid);
+        String name = idToName.get(tableid);
         if (name == null)
             throw new NoSuchElementException(String.format("Cannot find tableid %s in the catalog\n", tableid));
         return name;
@@ -146,10 +146,10 @@ public class Catalog {
      * Delete all tables from the catalog
      */
     public void clear() {
-        this.idToDbFile.clear();
-        this.idToName.clear();
-        this.idToPkey.clear();
-        this.nameToId.clear();
+        idToDbFile.clear();
+        idToName.clear();
+        idToPkey.clear();
+        nameToId.clear();
     }
 
     /**

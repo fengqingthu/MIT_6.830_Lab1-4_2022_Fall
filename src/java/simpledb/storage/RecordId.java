@@ -29,14 +29,14 @@ public class RecordId implements Serializable {
      * @return the tuple number this RecordId references.
      */
     public int getTupleNumber() {
-        return this.tupleno;
+        return tupleno;
     }
 
     /**
      * @return the page id this RecordId references.
      */
     public PageId getPageId() {
-        return this.pid;
+        return pid;
     }
 
     /**
@@ -49,7 +49,7 @@ public class RecordId implements Serializable {
     public boolean equals(Object o) {
         try {
             RecordId opposite = (RecordId) o;
-            return this.pid.equals(opposite.getPageId()) && this.tupleno == opposite.getTupleNumber();
+            return pid.equals(opposite.getPageId()) && tupleno == opposite.getTupleNumber();
         } catch (Exception ignore) {
             return false;
         }
@@ -63,7 +63,7 @@ public class RecordId implements Serializable {
      */
     @Override
     public int hashCode() {
-        return Objects.hash(this.pid, this.tupleno);
+        return Objects.hash(pid, tupleno);
     }
 
 }

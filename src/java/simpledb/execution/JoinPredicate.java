@@ -1,6 +1,5 @@
 package simpledb.execution;
 
-import simpledb.storage.Field;
 import simpledb.storage.Tuple;
 
 import java.io.Serializable;
@@ -40,18 +39,18 @@ public class JoinPredicate implements Serializable {
      * @return true if the tuples satisfy the predicate.
      */
     public boolean filter(Tuple t1, Tuple t2) {
-        return t1.getField(this.field1).compare(this.op, t2.getField(this.field2));
+        return t1.getField(field1).compare(op, t2.getField(field2));
     }
 
     public int getField1() {
-        return this.field1;
+        return field1;
     }
 
     public int getField2() {
-        return this.field2;
+        return field2;
     }
 
     public Predicate.Op getOperator() {
-        return this.op;
+        return op;
     }
 }

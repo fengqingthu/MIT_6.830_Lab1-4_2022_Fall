@@ -1,6 +1,5 @@
 package simpledb.execution;
 
-import simpledb.common.Type;
 import simpledb.storage.Field;
 import simpledb.storage.Tuple;
 
@@ -69,21 +68,21 @@ public class Predicate implements Serializable {
      * @return the field number
      */
     public int getField() {
-        return this.field;
+        return field;
     }
 
     /**
      * @return the operator
      */
     public Op getOp() {
-        return this.op;
+        return op;
     }
 
     /**
      * @return the operand
      */
     public Field getOperand() {
-        return this.operand;
+        return operand;
     }
 
     /**
@@ -96,7 +95,7 @@ public class Predicate implements Serializable {
      * @return true if the comparison is true, false otherwise.
      */
     public boolean filter(Tuple t) {
-        return t.getField(this.field).compare(this.op, this.operand);
+        return t.getField(field).compare(op, operand);
     }
 
     /**
@@ -104,7 +103,7 @@ public class Predicate implements Serializable {
      * operand_string"
      */
     public String toString() {
-        return "f=" + String.valueOf(this.field) + " op =" + this.op.toString()
-                + " operand=" + this.operand.toString();
+        return "f=" + String.valueOf(field) + " op =" + op.toString()
+                + " operand=" + operand.toString();
     }
 }

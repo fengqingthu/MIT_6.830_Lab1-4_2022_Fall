@@ -1,12 +1,10 @@
 package simpledb.execution;
 
 import simpledb.common.DbException;
-import simpledb.common.Type;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
 
-import java.util.ArrayList;
 import java.util.NoSuchElementException;
 
 /**
@@ -34,13 +32,13 @@ public class Join extends Operator {
         this.child1 = child1;
         this.child2 = child2;
         /* Directly merge. */
-        this.td = TupleDesc.merge(
+        td = TupleDesc.merge(
                 this.child1.getTupleDesc(),
                 this.child2.getTupleDesc());
     }
 
     public JoinPredicate getJoinPredicate() {
-        return this.p;
+        return p;
     }
 
     /**
@@ -48,7 +46,7 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField1Name() {
-        return this.child1.getTupleDesc().getFieldName(this.p.getField1());
+        return child1.getTupleDesc().getFieldName(p.getField1());
     }
 
     /**
@@ -56,7 +54,7 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField2Name() {
-        return this.child2.getTupleDesc().getFieldName(this.p.getField2());
+        return child2.getTupleDesc().getFieldName(p.getField2());
     }
 
     /**
@@ -64,7 +62,7 @@ public class Join extends Operator {
      *      implementation logic.
      */
     public TupleDesc getTupleDesc() {
-        return this.td;
+        return td;
     }
 
     public void open() throws DbException, NoSuchElementException,
@@ -81,7 +79,7 @@ public class Join extends Operator {
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        this.outer = null;
+        outer = null;
         child1.rewind();
         child2.rewind();
     }
@@ -106,9 +104,9 @@ public class Join extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         /* Initialize outer tuple on first call. */
-        if (this.outer == null) {
-            if (this.child1.hasNext())
-                this.outer = this.child1.next();
+        if (outer == null) {
+            if (child1.hasNext())
+                outer = child1.next();
             else
                 return null;
         }
@@ -116,9 +114,9 @@ public class Join extends Operator {
         Tuple inner;
         while (child2.hasNext()) {
             inner = child2.next();
-            if (this.p.filter(this.outer, inner)) {
+            if (p.filter(outer, inner)) {
                 /* Join two tuples. */
-                Tuple match = new Tuple(this.td);
+                Tuple match = new Tuple(td);
                 for (int i = 0; i < outer.getTupleDesc().numFields(); i++) {
                     match.setField(i, outer.getField(i));
                 }
@@ -136,21 +134,21 @@ public class Join extends Operator {
         /* Not found, rewind inner, increment outer and recurse. */
         child2.rewind();
         if (child1.hasNext())
-            this.outer = child1.next();
+            outer = child1.next();
         else
             return null;
-        return this.fetchNext();
+        return fetchNext();
     }
 
     @Override
     public OpIterator[] getChildren() {
-        return new OpIterator[] { this.child1, this.child2 };
+        return new OpIterator[] { child1, child2 };
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        this.child1 = children[0];
-        this.child2 = children[1];
+        child1 = children[0];
+        child2 = children[1];
     }
 
 }

@@ -8,9 +8,6 @@ import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 
@@ -36,8 +33,8 @@ public class HeapFile implements DbFile {
      *          file.
      */
     public HeapFile(File f, TupleDesc td) {
-        this.file = f;
-        this.schema = td;
+        file = f;
+        schema = td;
     }
 
     /**
@@ -46,7 +43,7 @@ public class HeapFile implements DbFile {
      * @return the File backing this HeapFile on disk.
      */
     public File getFile() {
-        return this.file;
+        return file;
     }
 
     /**
@@ -59,7 +56,7 @@ public class HeapFile implements DbFile {
      * @return an ID uniquely identifying this HeapFile.
      */
     public int getId() {
-        return this.file.getAbsolutePath().hashCode();
+        return file.getAbsolutePath().hashCode();
     }
 
     /**
@@ -68,16 +65,16 @@ public class HeapFile implements DbFile {
      * @return TupleDesc of this DbFile.
      */
     public TupleDesc getTupleDesc() {
-        return this.schema;
+        return schema;
     }
 
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
-        if (pid.getTableId() != this.getId())
+        if (pid.getTableId() != getId())
             return null;
         RandomAccessFile rFile;
         try {
-            rFile = new RandomAccessFile(this.file, "r");
+            rFile = new RandomAccessFile(file, "r");
         } catch (FileNotFoundException e) {
             return null;
         }
@@ -107,7 +104,7 @@ public class HeapFile implements DbFile {
      * Returns the number of pages in this HeapFile.
      */
     public int numPages() {
-        return (int) Math.ceil(this.file.length() / BufferPool.getPageSize());
+        return (int) Math.ceil(file.length() / BufferPool.getPageSize());
     }
 
     // see DbFile.java for javadocs

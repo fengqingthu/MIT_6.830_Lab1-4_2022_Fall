@@ -31,11 +31,11 @@ public class Filter extends Operator {
     }
 
     public Predicate getPredicate() {
-        return this.p;
+        return p;
     }
 
     public TupleDesc getTupleDesc() {
-        return this.td;
+        return td;
     }
 
     public void open() throws DbException, NoSuchElementException,
@@ -67,7 +67,7 @@ public class Filter extends Operator {
         if (!child.hasNext())
             return null;
         Tuple t = child.next();
-        while (!this.p.filter(t)) {
+        while (!p.filter(t)) {
             if (child.hasNext())
                 t = child.next();
             else
@@ -78,14 +78,14 @@ public class Filter extends Operator {
 
     @Override
     public OpIterator[] getChildren() {
-        return new OpIterator[]{this.child};
+        return new OpIterator[]{child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
         /* Only takes in the first element. */
-        if (this.child != children[0]) {
-            this.child = children[0];
+        if (child != children[0]) {
+            child = children[0];
         }
     }
 

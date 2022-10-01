@@ -102,16 +102,20 @@ public class Aggregate extends Operator {
      */
     private void populateAggregator() throws NoSuchElementException, DbException,
             TransactionAbortedException {
+        Type gfieldType = null;
+        if (gfield != Aggregator.NO_GROUPING)
+            gfieldType = child.getTupleDesc().getFieldType(gfield);
+        
         if (child.getTupleDesc().getFieldType(afield) == Type.INT_TYPE)
             aggr = new IntegerAggregator(
                     gfield,
-                    child.getTupleDesc().getFieldType(gfield),
+                    gfieldType,
                     afield,
                     op);
         else
             aggr = new StringAggregator(
                     gfield,
-                    child.getTupleDesc().getFieldType(gfield),
+                    gfieldType,
                     afield,
                     op);
 

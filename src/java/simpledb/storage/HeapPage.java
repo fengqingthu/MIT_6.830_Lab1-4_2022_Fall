@@ -54,9 +54,9 @@ public class HeapPage implements Page {
      * @see BufferPool#getPageSize()
      */
     public HeapPage(HeapPageId id, byte[] data) throws IOException {
-        this.pid = id;
-        this.td = Database.getCatalog().getTupleDesc(id.getTableId());
-        this.numSlots = getNumTuples();
+        pid = id;
+        td = Database.getCatalog().getTupleDesc(id.getTableId());
+        numSlots = getNumTuples();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
@@ -64,7 +64,7 @@ public class HeapPage implements Page {
         for (int i = 0; i < header.length; i++)
             header[i] = dis.readByte();
 
-        this.updateNumUnusedSlots();
+        updateNumUnusedSlots();
 
         tuples = new Tuple[numSlots];
         try {
@@ -85,7 +85,7 @@ public class HeapPage implements Page {
      * @return the number of tuples on this page
      */
     private int getNumTuples() {
-        return (int) Math.floor((BufferPool.getPageSize() * 8f) / (this.td.getSize() * 8f + 1f));
+        return (int) Math.floor((BufferPool.getPageSize() * 8f) / (td.getSize() * 8f + 1f));
     }
 
     /**
@@ -96,7 +96,7 @@ public class HeapPage implements Page {
      *         tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {
-        return (int) Math.ceil(this.getNumTuples() / 8f);
+        return (int) Math.ceil(getNumTuples() / 8f);
     }
 
     /**
@@ -128,7 +128,7 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-        return this.pid;
+        return pid;
     }
 
     /**
@@ -302,7 +302,7 @@ public class HeapPage implements Page {
      * Returns the number of unused (i.e., empty) slots on this page.
      */
     public int getNumUnusedSlots() {
-        return this.numUnusedSlots;
+        return numUnusedSlots;
     }
 
     /*
@@ -311,11 +311,11 @@ public class HeapPage implements Page {
      */
     private void updateNumUnusedSlots() {
         int res = 0;
-        for (int i = 0; i < this.numSlots; i++) {
-            if (!this.isSlotUsed(i))
+        for (int i = 0; i < numSlots; i++) {
+            if (!isSlotUsed(i))
                 res++;
         }
-        this.numUnusedSlots = res;
+        numUnusedSlots = res;
     }
 
     /**
@@ -323,7 +323,7 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // Assuming valid input i
-        byte b = this.header[(int) Math.floor(i / 8f)];
+        byte b = header[(int) Math.floor(i / 8f)];
         return ((b >> (i % 8)) & 1) == 1;
     }
 
@@ -341,6 +341,6 @@ public class HeapPage implements Page {
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        return Arrays.stream(this.tuples).filter(s -> s != null).iterator();
+        return Arrays.stream(tuples).filter(s -> s != null).iterator();
     }
 }

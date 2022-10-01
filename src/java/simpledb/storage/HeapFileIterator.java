@@ -28,42 +28,42 @@ public class HeapFileIterator implements DbFileIterator {
     }
 
     public void open() throws TransactionAbortedException, DbException {
-        this.currentPage = getPage(this.nextPageIdx++);
-        this.currentIter = this.currentPage.iterator();
+        currentPage = getPage(nextPageIdx++);
+        currentIter = currentPage.iterator();
     }
 
     public boolean hasNext() throws DbException, TransactionAbortedException {
-        if (this.currentIter == null)
+        if (currentIter == null)
             return false;
-        if (this.currentIter.hasNext())
+        if (currentIter.hasNext())
             return true;
-        while (this.nextPageIdx < this.hf.numPages()) {
-            this.currentPage = getPage(this.nextPageIdx++);
-            this.currentIter = this.currentPage.iterator();
-            if (this.currentIter.hasNext())
+        while (nextPageIdx < hf.numPages()) {
+            currentPage = getPage(nextPageIdx++);
+            currentIter = currentPage.iterator();
+            if (currentIter.hasNext())
                 return true;
         }
         return false;
     }
 
     public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
-        if (this.currentIter == null)
+        if (currentIter == null)
             throw new NoSuchElementException("There are no more tuples\n");
-        return this.currentIter.next();
+        return currentIter.next();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        this.close();
-        this.open();
+        close();
+        open();
     }
 
     public void close() {
-        this.nextPageIdx = 0;
-        this.currentIter = null;
+        nextPageIdx = 0;
+        currentIter = null;
     }
 
     private HeapPage getPage(int pageIdx) throws TransactionAbortedException, DbException {
-        final HeapPageId pid = new HeapPageId(this.hf.getId(), pageIdx);
+        final HeapPageId pid = new HeapPageId(hf.getId(), pageIdx);
         return (HeapPage) Database.getBufferPool().getPage(tid, pid, Permissions.READ_ONLY);
     }
 }

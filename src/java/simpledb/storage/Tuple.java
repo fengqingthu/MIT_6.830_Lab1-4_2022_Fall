@@ -32,7 +32,7 @@ public class Tuple implements Serializable {
      * @return The TupleDesc representing the schema of this tuple.
      */
     public TupleDesc getTupleDesc() {
-        return this.schema;
+        return schema;
     }
 
     /**
@@ -40,7 +40,7 @@ public class Tuple implements Serializable {
      *         be null.
      */
     public RecordId getRecordId() {
-        return this.rid;
+        return rid;
     }
 
     /**
@@ -59,7 +59,7 @@ public class Tuple implements Serializable {
      * @param f new value for the field.
      */
     public void setField(int i, Field f) {
-        this.fields[i] = f;
+        fields[i] = f;
     }
 
     /**
@@ -67,7 +67,7 @@ public class Tuple implements Serializable {
      * @return the value of the ith field, or null if it has not been set.
      */
     public Field getField(int i) {
-        return this.fields[i];
+        return fields[i];
     }
 
     /**
@@ -80,10 +80,10 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         String res = "";
-        for (int i = 0; i < this.fields.length - 1; i++) {
-            res += this.fields[i].toString() + " ";
+        for (int i = 0; i < fields.length - 1; i++) {
+            res += fields[i].toString() + " ";
         }
-        res += this.fields[this.fields.length - 1].toString();
+        res += fields[fields.length - 1].toString();
         return res;
     }
 
@@ -91,13 +91,13 @@ public class Tuple implements Serializable {
      * @return An iterator which iterates over all the fields of this tuple
      */
     public Iterator<Field> fields() {
-        return Arrays.stream(this.fields).iterator();
+        return Arrays.stream(fields).iterator();
     }
 
     /**
      * reset the TupleDesc of this tuple (only affecting the TupleDesc)
      */
     public void resetTupleDesc(TupleDesc td) {
-        this.schema = td;
+        schema = td;
     }
 }
