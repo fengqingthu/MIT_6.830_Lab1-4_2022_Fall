@@ -8,7 +8,9 @@ import simpledb.transaction.TransactionId;
 
 import java.io.*;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.NoSuchElementException;
 
 /**
@@ -20,16 +22,20 @@ import java.util.NoSuchElementException;
  */
 public class HeapPage implements Page {
 
-    final HeapPageId pid;
-    final TupleDesc td;
-    final byte[] header;
-    final Tuple[] tuples;
-    final int numSlots;
+    private final HeapPageId pid;
+    private final TupleDesc td;
+    private byte[] header;
+    private Tuple[] tuples;
+    private final int numSlots;
+    
     /*
-     * This numUnusedSlots variable should be updated when insert or delete tuples
-     * from this page so that getNumUnusedSlots runs in amortized constant time.
-     */
-    private int numUnusedSlots;
+    * For efficient deletion/insertion of tuples into the page. The freeList
+    * maintains a stack of unused tuplenos.
+    */
+    private FreeList<Integer> freeList;
+    
+    private boolean isDirty = false;
+    private TransactionId markedBy = null;
 
     byte[] oldData;
     private final Byte oldDataLock = (byte) 0;
@@ -57,14 +63,14 @@ public class HeapPage implements Page {
         pid = id;
         td = Database.getCatalog().getTupleDesc(id.getTableId());
         numSlots = getNumTuples();
+        freeList = new FreeList<Integer>();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
         header = new byte[getHeaderSize()];
         for (int i = 0; i < header.length; i++)
             header[i] = dis.readByte();
-
-        updateNumUnusedSlots();
+        populateFreeList();
 
         tuples = new Tuple[numSlots];
         try {
@@ -220,7 +226,7 @@ public class HeapPage implements Page {
         }
 
         // padding
-        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length); 
+        int zerolen = BufferPool.getPageSize() - (header.length + td.getSize() * tuples.length);
         // - numSlots * td.getSize();
         byte[] zeroes = new byte[zerolen];
         try {
@@ -254,16 +260,21 @@ public class HeapPage implements Page {
 
     /**
      * Delete the specified tuple from the page; the corresponding header bit should
-     * be updated to reflect
-     * that it is no longer stored on any page.
+     * be updated to reflect that it is no longer stored on any page.
      *
      * @param t The tuple to delete
      * @throws DbException if this tuple is not on this page, or tuple slot is
      *                     already empty.
      */
     public void deleteTuple(Tuple t) throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        if (t.getRecordId().getPageId() != pid)
+            throw new DbException("tuple not on this page");
+        int tupleno = t.getRecordId().getTupleNumber();
+        if (!isSlotUsed(tupleno))
+            throw new DbException("tuple slot is already empty");
+            
+        markSlotUsed(tupleno, false);
+        freeList.append(tupleno);
     }
 
     /**
@@ -275,8 +286,15 @@ public class HeapPage implements Page {
      *                     is mismatch.
      */
     public void insertTuple(Tuple t) throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        if (getNumUnusedSlots() == 0)
+            throw new DbException("insertion into a full page");
+        if (!td.equals(t.getTupleDesc())) // why != does not work?
+            throw new DbException("schema mismatch between page and inserted tuple");
+
+        int dst = freeList.pop();
+        markSlotUsed(dst, true);
+        tuples[dst] = t;
+        t.setRecordId(new RecordId(pid, dst));
     }
 
     /**
@@ -284,8 +302,11 @@ public class HeapPage implements Page {
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        isDirty = dirty;
+        if (dirty)
+            markedBy = tid;
+        else
+            markedBy = null;
     }
 
     /**
@@ -293,8 +314,8 @@ public class HeapPage implements Page {
      * the page is not dirty
      */
     public TransactionId isDirty() {
-        // TODO: some code goes here
-        // Not necessary for lab1
+        if (isDirty)
+            return markedBy;
         return null;
     }
 
@@ -302,20 +323,19 @@ public class HeapPage implements Page {
      * Returns the number of unused (i.e., empty) slots on this page.
      */
     public int getNumUnusedSlots() {
-        return numUnusedSlots;
+        return freeList.size();
     }
 
     /*
-     * Helper method that actually iterates over the header and re-calculates the
-     * number of unused slots inside this page.
+     * Helper method that scan through the slots and build the freeList and freeMap
+     * data structures.
      */
-    private void updateNumUnusedSlots() {
-        int res = 0;
+    private void populateFreeList() {
         for (int i = 0; i < numSlots; i++) {
-            if (!isSlotUsed(i))
-                res++;
+            if (!isSlotUsed(i)) {
+                freeList.append(i);
+            }
         }
-        numUnusedSlots = res;
     }
 
     /**
@@ -323,16 +343,18 @@ public class HeapPage implements Page {
      */
     public boolean isSlotUsed(int i) {
         // Assuming valid input i
-        byte b = header[(int) Math.floor(i / 8f)];
-        return ((b >> (i % 8)) & 1) == 1;
+        return ((header[(int) Math.floor(i / 8f)] >> (i % 8)) & 1) == 1;
     }
 
     /**
-     * Abstraction to fill or clear a slot on this page.
+     * Abstraction to fill or clear a slot on this page. Note this method only
+     * modifies the page header corresponding bit, without updateing the freeList.
      */
     private void markSlotUsed(int i, boolean value) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        if (value)
+            header[(int) Math.floor(i / 8f)] |= (1 << (i % 8));
+        else
+            header[(int) Math.floor(i / 8f)] &= ~(1 << (i % 8));
     }
 
     /**

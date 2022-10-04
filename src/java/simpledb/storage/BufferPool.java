@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentMap;
  * disk. Access methods call into it to retrieve pages, and it fetches
  * pages from the appropriate location.
  * <p>
- * The BufferPool is also responsible for locking;  when a transaction fetches
+ * The BufferPool is also responsible for locking; when a transaction fetches
  * a page, BufferPool checks that the transaction has the appropriate
  * locks to read/write the page.
  *
@@ -70,9 +70,9 @@ public class BufferPool {
      * Will acquire a lock and may block if that lock is held by another
      * transaction.
      * <p>
-     * The retrieved page should be looked up in the buffer pool.  If it
-     * is present, it should be returned.  If it is not present, it should
-     * be added to the buffer pool and returned.  If there is insufficient
+     * The retrieved page should be looked up in the buffer pool. If it
+     * is present, it should be returned. If it is not present, it should
+     * be added to the buffer pool and returned. If there is insufficient
      * space in the buffer pool, a page should be evicted and the new page
      * should be added in its place.
      *
@@ -144,7 +144,7 @@ public class BufferPool {
     }
 
     /**
-     * Add a tuple to the specified table on behalf of transaction tid.  Will
+     * Add a tuple to the specified table on behalf of transaction tid. Will
      * acquire a write lock on the page the tuple is added to and any other
      * pages that are updated (Lock acquisition is not needed for lab2).
      * May block if the lock(s) cannot be acquired.
@@ -160,8 +160,12 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
+        System.out.printf("dirtypage num= %d\n", dirtyPages.size());
+        for (Page pg : dirtyPages) {
+            pg.markDirty(true, tid);
+            pidToPage.put(pg.getId(), pg);
+        }
     }
 
     /**
@@ -179,8 +183,12 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId())
+                .deleteTuple(tid, t);
+        for (Page pg : dirtyPages) {
+            pg.markDirty(true, tid);
+            pidToPage.put(pg.getId(), pg);
+        }
     }
 
     /**

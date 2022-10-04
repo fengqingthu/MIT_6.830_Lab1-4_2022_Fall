@@ -197,8 +197,6 @@ public class TupleDesc implements Serializable {
             if (opposite.fields.length != fields.length)
                 return false;
             for (int i = 0; i < fields.length; i++) {
-                if (fields[i].fieldName != opposite.getFieldName(i))
-                    return false;
                 if (fields[i].fieldType != opposite.getFieldType(i))
                     return false;
             }
