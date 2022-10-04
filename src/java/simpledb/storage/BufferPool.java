@@ -34,6 +34,8 @@ public class BufferPool {
     private final int maxNumPages;
     private HashMap<PageId, Page> pidToPage;
 
+    private MRUList<PageId> mru;
+
     /**
      * Default number of pages passed to the constructor. This is used by
      * other classes. BufferPool should use the numPages argument to the
@@ -49,6 +51,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         maxNumPages = numPages;
         pidToPage = new HashMap<PageId, Page>();
+        mru = new MRUList<PageId>(numPages);
     }
 
     public static int getPageSize() {
@@ -85,12 +88,13 @@ public class BufferPool {
         Page page = pidToPage.get(pid);
         if (page != null)
             return page;
-        if (pidToPage.size() >= maxNumPages)
-            throw new DbException("BufferPool overflow\n");
+        if (pidToPage.size() == maxNumPages)
+            evictPage();
         /* Read the page from disk and add to buffer. */
         try {
             page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
             pidToPage.put(pid, page);
+            mru.add(pid);
             return page;
         } catch (Exception e) {
             e.printStackTrace();
@@ -197,10 +201,9 @@ public class BufferPool {
      * break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        System.out.println("flushing all pages");
-        // TODO: some code goes here
-        // not necessary for lab1
-
+        for (PageId pid: pidToPage.keySet()) {
+            flushPage(pid);
+        }
     }
 
     /**
@@ -213,8 +216,8 @@ public class BufferPool {
      * are removed from the cache so they can be reused safely
      */
     public synchronized void removePage(PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        mru.remove(pid);
+        pidToPage.remove(pid);
     }
 
     /**
@@ -223,8 +226,7 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(pidToPage.get(pid));
     }
 
     /**
@@ -240,8 +242,7 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        pidToPage.remove(mru.evict());
     }
 
 }
