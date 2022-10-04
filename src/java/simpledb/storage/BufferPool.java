@@ -161,7 +161,6 @@ public class BufferPool {
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
-        System.out.printf("dirtypage num= %d\n", dirtyPages.size());
         for (Page pg : dirtyPages) {
             pg.markDirty(true, tid);
             pidToPage.put(pg.getId(), pg);

@@ -1,8 +1,12 @@
 package simpledb.execution;
 
+import java.io.IOException;
+
 import simpledb.common.Database;
 import simpledb.common.DbException;
+import simpledb.common.Type;
 import simpledb.storage.BufferPool;
+import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
@@ -16,6 +20,14 @@ public class Insert extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private static final TupleDesc td = new TupleDesc(new Type[] {Type.INT_TYPE}, new String[] {"num_inserted"});
+    private final TransactionId tid;
+    private OpIterator child;
+    private final int tableId;
+
+    private boolean done = false;
+    private Tuple res; // contains number of affected tuples
+
     /**
      * Constructor.
      *
@@ -27,24 +39,47 @@ public class Insert extends Operator {
      */
     public Insert(TransactionId t, OpIterator child, int tableId)
             throws DbException {
-        // TODO: some code goes here
+        if (!child.getTupleDesc().equals(Database.getCatalog().getDatabaseFile(tableId).getTupleDesc()))
+            throw new DbException("trying to insert tuples withou mismatching schema into a table");
+        tid = t;
+        this.child = child;
+        this.tableId = tableId;
     }
 
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return td;
     }
 
     public void open() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        child.open();
+        insertTuples();
+        super.open();
+    }
+
+    private void insertTuples() throws DbException, TransactionAbortedException {
+        int num = 0;
+        Tuple tu;
+        while (child.hasNext()) {
+            tu = child.next();
+            try {
+                Database.getBufferPool().insertTuple(tid, tableId, tu);
+            } catch (IOException e) {
+                e.printStackTrace();
+                throw new DbException("fail to insert tuple due to IO error");
+            }
+            num++;
+        }
+        res = new Tuple(td);
+        res.setField(0, new IntField(num));
     }
 
     public void close() {
-        // TODO: some code goes here
+        super.close();
+        child.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        done = false;
     }
 
     /**
@@ -61,18 +96,21 @@ public class Insert extends Operator {
      * @see BufferPool#insertTuple
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        if (done)
+            return null;
+        done = true;
+        return res;
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return new OpIterator[]{child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+        if (child != children[0]) {
+            child = children[0];
+        }
     }
 }
