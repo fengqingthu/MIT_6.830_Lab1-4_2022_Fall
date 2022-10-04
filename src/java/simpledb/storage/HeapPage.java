@@ -12,6 +12,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Each instance of HeapPage stores data for one page of HeapFiles and
@@ -27,13 +29,13 @@ public class HeapPage implements Page {
     private byte[] header;
     private Tuple[] tuples;
     private final int numSlots;
-    
+
     /*
-    * For efficient deletion/insertion of tuples into the page. The freeList
-    * maintains a stack of unused tuplenos.
-    */
+     * For efficient deletion/insertion of tuples into the page. The freeList
+     * maintains a stack of unused tuplenos.
+     */
     private FreeList<Integer> freeList;
-    
+
     private boolean isDirty = false;
     private TransactionId markedBy = null;
 
@@ -272,7 +274,7 @@ public class HeapPage implements Page {
         int tupleno = t.getRecordId().getTupleNumber();
         if (!isSlotUsed(tupleno))
             throw new DbException("tuple slot is already empty");
-            
+
         markSlotUsed(tupleno, false);
         freeList.append(tupleno);
     }
@@ -363,6 +365,8 @@ public class HeapPage implements Page {
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        return Arrays.stream(tuples).filter(s -> s != null).iterator();
+        return IntStream.range(0, numSlots)
+                .filter(i -> isSlotUsed(i))
+                .mapToObj(i -> tuples[i]).iterator();
     }
 }

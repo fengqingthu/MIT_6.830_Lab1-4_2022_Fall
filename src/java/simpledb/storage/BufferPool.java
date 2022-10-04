@@ -185,6 +185,7 @@ public class BufferPool {
         List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId())
                 .deleteTuple(tid, t);
         for (Page pg : dirtyPages) {
+            // System.out.printf("dirty page unused size = %d\n", ((HeapPage) pg).getNumUnusedSlots());
             pg.markDirty(true, tid);
             pidToPage.put(pg.getId(), pg);
         }
@@ -196,6 +197,7 @@ public class BufferPool {
      * break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
+        System.out.println("flushing all pages");
         // TODO: some code goes here
         // not necessary for lab1
 

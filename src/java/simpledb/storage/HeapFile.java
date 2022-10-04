@@ -203,8 +203,7 @@ public class HeapFile implements DbFile {
     public List<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
         ArrayList<Page> res = new ArrayList<Page>();
-        if (t.getRecordId().getPageId().getTableId() != getId()
-                || t.getRecordId().getPageId().getPageNumber() >= numPages())
+        if (t.getRecordId().getPageId().getTableId() != getId())
             throw new DbException("tuple not found in this table");
 
         HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(),

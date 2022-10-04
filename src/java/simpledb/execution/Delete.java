@@ -45,7 +45,6 @@ public class Delete extends Operator {
 
     public void open() throws DbException, TransactionAbortedException {
         child.open();
-        deleteTuples();
         super.open();
     }
 
@@ -87,6 +86,7 @@ public class Delete extends Operator {
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         if (done)
             return null;
+        deleteTuples();
         done = true;
         return res;
     }

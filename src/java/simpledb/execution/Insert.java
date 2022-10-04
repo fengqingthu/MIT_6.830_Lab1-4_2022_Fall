@@ -52,7 +52,6 @@ public class Insert extends Operator {
 
     public void open() throws DbException, TransactionAbortedException {
         child.open();
-        insertTuples();
         super.open();
     }
 
@@ -98,6 +97,7 @@ public class Insert extends Operator {
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         if (done)
             return null;
+        insertTuples();
         done = true;
         return res;
     }
