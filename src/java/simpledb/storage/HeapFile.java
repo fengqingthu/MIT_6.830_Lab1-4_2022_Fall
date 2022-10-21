@@ -10,7 +10,6 @@ import simpledb.transaction.TransactionId;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 /**
  * HeapFile is an implementation of a DbFile that stores a collection of tuples

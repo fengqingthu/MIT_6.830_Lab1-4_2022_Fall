@@ -1,7 +1,6 @@
 package simpledb.optimizer;
 
 import simpledb.common.Database;
-import simpledb.common.DbException;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
 import simpledb.execution.SeqScan;
@@ -10,6 +9,7 @@ import simpledb.transaction.Transaction;
 import simpledb.transaction.TransactionId;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +32,8 @@ public class TableStats {
     // Use two hashtables to store histograms.
     private HashMap<Integer, StringHistogram> strHists;
     private HashMap<Integer, IntHistogram> intHists;
+    // Number of distinct values, for join cardinality estimate.
+    private HashMap<Integer, Integer> numDistinct;
 
     public static TableStats getTableStats(String tablename) {
         return statsMap.get(tablename);
@@ -98,6 +100,9 @@ public class TableStats {
         int numFields = schema.numFields();
         strHists = new HashMap<Integer, StringHistogram>();
         intHists = new HashMap<Integer, IntHistogram>();
+        numDistinct = new HashMap<Integer, Integer>();
+        HashMap<Integer, HashSet<String>> seenStr = new HashMap<Integer, HashSet<String>>();
+        HashMap<Integer, HashSet<Integer>> seenInt = new HashMap<Integer, HashSet<Integer>>();
 
         HashMap<Integer, Integer> mins = new HashMap<Integer, Integer>();
         HashMap<Integer, Integer> maxs = new HashMap<Integer, Integer>();
@@ -106,8 +111,10 @@ public class TableStats {
             if (schema.getFieldType(i) == Type.INT_TYPE) {
                 mins.put(i, Integer.MAX_VALUE);
                 maxs.put(i, Integer.MIN_VALUE);
+                seenInt.put(i, new HashSet<Integer>());
             } else {
                 strHists.put(i, new StringHistogram(NUM_HIST_BINS));
+                seenStr.put(i, new HashSet<String>());
             }
         }
 
@@ -131,22 +138,45 @@ public class TableStats {
             }
 
             scan.rewind();
-            // Second scan, load cell values into hists.
+            // Second scan, load cell values into hists. And calculate distinct values.
             while (scan.hasNext()) {
                 Tuple tu = scan.next();
                 for (int i = 0; i < numFields; i++) {
-                    if (strHists.containsKey(i))
-                        strHists.get(i).addValue(((StringField) tu.getField(i)).getValue());
-                    else
-                        intHists.get(i).addValue(((IntField) tu.getField(i)).getValue());
+                    if (strHists.containsKey(i)) {
+                        String val = ((StringField) tu.getField(i)).getValue();
+                        strHists.get(i).addValue(val);
+                        seenStr.get(i).add(val);
+                    } else {
+                        int val = ((IntField) tu.getField(i)).getValue();
+                        intHists.get(i).addValue(val);
+                        seenInt.get(i).add(val);
+                    }
                 }
             }
             scan.close();
+            // Update numDistinct.
+            for (int i : seenInt.keySet()) {
+                numDistinct.put(i, seenInt.get(i).size());
+            }
+            for (int i : seenStr.keySet()) {
+                numDistinct.put(i, seenStr.get(i).size());
+            }
         } catch (Exception e) {
             System.out.printf("Fail to construct stats of tableid= %d\n", tableid);
             e.printStackTrace();
             System.exit(1);
         }
+    }
+
+    /**
+     * @param field The index of the field in a row.
+     * @return The number of distinct values in the given column.
+     */
+    public int getNumDistinct(int field) {
+        Integer res = numDistinct.get(field);
+        if (res != null)
+            return res;
+        throw new IllegalArgumentException("Input filed index out of range.");
     }
 
     /**
