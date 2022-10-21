@@ -1,12 +1,15 @@
 package simpledb.optimizer;
 
 import simpledb.common.Database;
+import simpledb.common.DbException;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
 import simpledb.execution.SeqScan;
 import simpledb.storage.*;
 import simpledb.transaction.Transaction;
+import simpledb.transaction.TransactionId;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +26,12 @@ public class TableStats {
     private static final ConcurrentMap<String, TableStats> statsMap = new ConcurrentHashMap<>();
 
     static final int IOCOSTPERPAGE = 1000;
+    private final int ioCostPerPage;
+    private final int tableid;
+    private int ntups = 0;
+    // Use two hashtables to store histograms.
+    private HashMap<Integer, StringHistogram> strHists;
+    private HashMap<Integer, IntHistogram> intHists;
 
     public static TableStats getTableStats(String tablename) {
         return statsMap.get(tablename);
@@ -71,7 +80,8 @@ public class TableStats {
      * column of a table
      *
      * @param tableid       The table over which to compute statistics
-     * @param ioCostPerPage The cost per page of IO. This doesn't differentiate between
+     * @param ioCostPerPage The cost per page of IO. This doesn't differentiate
+     *                      between
      *                      sequential-scan IO and disk seeks.
      */
     public TableStats(int tableid, int ioCostPerPage) {
@@ -82,7 +92,61 @@ public class TableStats {
         // You should try to do this reasonably efficiently, but you don't
         // necessarily have to (for example) do everything
         // in a single scan of the table.
-        // TODO: some code goes here
+        this.tableid = tableid;
+        this.ioCostPerPage = ioCostPerPage;
+        TupleDesc schema = Database.getCatalog().getTupleDesc(tableid);
+        int numFields = schema.numFields();
+        strHists = new HashMap<Integer, StringHistogram>();
+        intHists = new HashMap<Integer, IntHistogram>();
+
+        HashMap<Integer, Integer> mins = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> maxs = new HashMap<Integer, Integer>();
+
+        for (int i = 0; i < numFields; i++) {
+            if (schema.getFieldType(i) == Type.INT_TYPE) {
+                mins.put(i, Integer.MAX_VALUE);
+                maxs.put(i, Integer.MIN_VALUE);
+            } else {
+                strHists.put(i, new StringHistogram(NUM_HIST_BINS));
+            }
+        }
+
+        SeqScan scan = new SeqScan(new TransactionId(), tableid);
+        try {
+            scan.open();
+            // First scan, sample min and max of int columns, instantiate IntHistograms.
+            while (scan.hasNext()) {
+                Tuple tu = scan.next();
+                ntups++;
+                for (int i = 0; i < numFields; i++) {
+                    if (mins.containsKey(i)) {
+                        int val = ((IntField) tu.getField(i)).getValue();
+                        mins.put(i, Math.min(mins.get(i), val));
+                        maxs.put(i, Math.max(maxs.get(i), val));
+                    }
+                }
+            }
+            for (int i : mins.keySet()) {
+                intHists.put(i, new IntHistogram(NUM_HIST_BINS, mins.get(i), maxs.get(i)));
+            }
+
+            scan.rewind();
+            // Second scan, load cell values into hists.
+            while (scan.hasNext()) {
+                Tuple tu = scan.next();
+                for (int i = 0; i < numFields; i++) {
+                    if (strHists.containsKey(i))
+                        strHists.get(i).addValue(((StringField) tu.getField(i)).getValue());
+                    else
+                        intHists.get(i).addValue(((IntField) tu.getField(i)).getValue());
+                }
+            }
+            scan.close();
+        } catch (Exception e) {
+            System.out.printf("Fail to construct stats of tableid= %d\n", tableid);
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 
     /**
@@ -98,8 +162,8 @@ public class TableStats {
      * @return The estimated cost of scanning the table.
      */
     public double estimateScanCost() {
-        // TODO: some code goes here
-        return 0;
+        // For now we force downcast to HeapFile.
+        return ((HeapFile) Database.getCatalog().getDatabaseFile(tableid)).numPages() * ioCostPerPage;
     }
 
     /**
@@ -111,8 +175,7 @@ public class TableStats {
      *         selectivityFactor
      */
     public int estimateTableCardinality(double selectivityFactor) {
-        // TODO: some code goes here
-        return 0;
+        return (int) Math.round(ntups * selectivityFactor);
     }
 
     /**
@@ -120,13 +183,18 @@ public class TableStats {
      *
      * @param field the index of the field
      * @param op    the operator in the predicate
-     *              The semantic of the method is that, given the table, and then given a
-     *              tuple, of which we do not know the value of the field, return the
-     *              expected selectivity. You may estimate this value from the histograms.
+     *              The semantic of the method is that, given the table, and then
+     *              given a tuple, of which we do not know the value of the field,
+     *              return the expected selectivity. You may estimate this value
+     *              from the histograms.
      */
     public double avgSelectivity(int field, Predicate.Op op) {
-        // TODO: some code goes here
-        return 1.0;
+        if (strHists.containsKey(field)) {
+            return strHists.get(field).avgSelectivity();
+        } else if (intHists.containsKey(field)) {
+            return intHists.get(field).avgSelectivity();
+        } else
+            throw new IllegalArgumentException("Input field index out of range.");
     }
 
     /**
@@ -140,16 +208,19 @@ public class TableStats {
      *         predicate
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
-        // TODO: some code goes here
-        return 1.0;
+        if (strHists.containsKey(field)) {
+            return strHists.get(field).estimateSelectivity(op, ((StringField) constant).getValue());
+        } else if (intHists.containsKey(field)) {
+            return intHists.get(field).estimateSelectivity(op, ((IntField) constant).getValue());
+        } else
+            throw new IllegalArgumentException("Input field index out of range.");
     }
 
     /**
      * return the total number of tuples in this table
      */
     public int totalTuples() {
-        // TODO: some code goes here
-        return 0;
+        return ntups;
     }
 
 }

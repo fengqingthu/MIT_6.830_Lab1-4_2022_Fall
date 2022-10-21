@@ -110,13 +110,13 @@ public class IntHistogram {
                 }
                 return ans;
             case GREATER_THAN_OR_EQ:
-                return estimateSelectivity(Op.EQUALS, v) + estimateSelectivity(Op.GREATER_THAN, v);
+                return Math.min(1f, estimateSelectivity(Op.EQUALS, v) + estimateSelectivity(Op.GREATER_THAN, v));
             case LESS_THAN_OR_EQ:
-                return estimateSelectivity(Op.EQUALS, v) + estimateSelectivity(Op.LESS_THAN, v);
+                return Math.min(1f, estimateSelectivity(Op.EQUALS, v) + estimateSelectivity(Op.LESS_THAN, v));
             case NOT_EQUALS:
-                return 1f - estimateSelectivity(Op.EQUALS, v);
+                return Math.max(0f, 1f - estimateSelectivity(Op.EQUALS, v));
             default:
-                throw new IllegalArgumentException("Illegal op for int histogram estimation\n");
+                throw new IllegalArgumentException("Illegal op for int histogram estimation.");
         }
     }
 
