@@ -213,21 +213,17 @@ public class JoinOptimizer {
      * the Lab 3 description for hints on how this should be implemented.
      *
      * @param stats               Statistics for each table involved in the join,
-     *                            referenced by
-     *                            base table names, not alias
+     *                            referenced by base table names, not alias
      * @param filterSelectivities Selectivities of the filter predicates on each
-     *                            table in the
-     *                            join, referenced by table alias (if no alias, the
-     *                            base table
-     *                            name)
+     *                            table in the join, referenced by table alias
+     *                            (if no alias, the base table name)
      * @param explain             Indicates whether your code should explain its
-     *                            query plan or
-     *                            simply execute it
+     *                            query plan or simply execute it
      * @return A List<LogicalJoinNode> that stores joins in the left-deep
      *         order in which they should be executed.
      * @throws ParsingException when stats or filter selectivities is missing a
-     *                          table in the
-     *                          join, or or when another internal error occurs
+     *                          table in the join, or or when another internal
+     *                          error occurs
      */
     public List<LogicalJoinNode> orderJoins(
             Map<String, TableStats> stats,
@@ -263,8 +259,7 @@ public class JoinOptimizer {
      *                            this joinSet,
      *                            from returned CostCard)
      * @param pc                  the PlanCache for this join; should have subplans
-     *                            for all
-     *                            plans of size joinSet.size()-1
+     *                            for all plans of size joinSet.size()-1
      * @return A {@link CostCard} objects desribing the cost, cardinality,
      *         optimal subplan
      * @throws ParsingException when stats, filterSelectivities, or pc object is
@@ -333,8 +328,7 @@ public class JoinOptimizer {
             // estimate cost of right subtree
             if (doesJoin(prevBest, table1Alias)) { // j.t1 is in prevBest
                 t1cost = prevBestCost; // left side just has cost of whatever
-                // left
-                // subtree is
+                // left subtree is
                 t1card = bestCard;
                 leftPkey = hasPkey(prevBest);
 
@@ -348,11 +342,9 @@ public class JoinOptimizer {
                 rightPkey = j.t2Alias != null && isPkey(j.t2Alias,
                         j.f2PureName);
             } else if (doesJoin(prevBest, j.t2Alias)) { // j.t2 is in prevbest
-                // (both
-                // shouldn't be)
+                // (both shouldn't be)
                 t2cost = prevBestCost; // left side just has cost of whatever
-                // left
-                // subtree is
+                // left subtree is
                 t2card = bestCard;
                 rightPkey = hasPkey(prevBest);
                 t1cost = stats.get(table1Name).estimateScanCost();

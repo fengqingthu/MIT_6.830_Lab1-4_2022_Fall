@@ -12,7 +12,7 @@ import simpledb.execution.Predicate.Op;
 public class IntHistogram {
 
     private HashMap<Integer, Integer> hist;
-    private int[] b_width;
+    private final int[] b_width;
     private final int buckets;
     private final double step;
     private final int min;

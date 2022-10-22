@@ -30,10 +30,10 @@ public class TableStats {
     private final int tableid;
     private int ntups = 0;
     // Use two hashtables to store histograms.
-    private HashMap<Integer, StringHistogram> strHists;
-    private HashMap<Integer, IntHistogram> intHists;
+    private final HashMap<Integer, StringHistogram> strHists;
+    private final HashMap<Integer, IntHistogram> intHists;
     // Number of distinct values, for join cardinality estimate.
-    private HashMap<Integer, Integer> numDistinct;
+    private final HashMap<Integer, Integer> numDistinct;
 
     public static TableStats getTableStats(String tablename) {
         return statsMap.get(tablename);
