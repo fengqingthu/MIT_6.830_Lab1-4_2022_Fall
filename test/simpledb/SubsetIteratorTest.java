@@ -1,27 +1,18 @@
 package simpledb;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.Assert;
 
-import simpledb.common.Database;
-import simpledb.common.DbException;
-import simpledb.execution.Predicate;
 import simpledb.execution.SubsetIterator;
-import simpledb.optimizer.TableStats;
-import simpledb.storage.Field;
-import simpledb.storage.HeapFile;
-import simpledb.storage.IntField;
 import simpledb.systemtest.SimpleDbTestBase;
-import simpledb.systemtest.SystemTestUtil;
-import simpledb.transaction.TransactionAbortedException;
 
 public class SubsetIteratorTest extends SimpleDbTestBase {
 	
@@ -35,7 +26,7 @@ public class SubsetIteratorTest extends SimpleDbTestBase {
 	 * Verify the functionality of our SubsetIterator.
 	 */
 	@SuppressWarnings("unchecked")
-	@Test public void subsetIteratorTest() {
+	@Test public void subsetIteratorFunctionalityTest() {
 		list = Arrays.asList(1, 2, 3, 4, 5, 6);
 		SubsetIterator<Integer> iter;
 		Set<Set<Integer>> res;
@@ -75,6 +66,26 @@ public class SubsetIteratorTest extends SimpleDbTestBase {
 			res.add(next);
 		}
 		Assert.assertEquals(1, res.size());
+	}
+
+	/**
+	 * Verify the efficiency of our SubsetIterator.
+	 */
+	@SuppressWarnings("unchecked")
+	@Test(timeout = 300000) public void subsetIteratorEfficiencyTest() {
+		List<Integer> list = IntStream.rangeClosed(1, 20)
+    		.boxed().collect(Collectors.toList());
+		SubsetIterator<Integer> iter;
+		Set<Set<Integer>> res;
+
+		iter = new SubsetIterator<>(list, 10);
+		res = new HashSet<>();
+		while (iter.hasNext()) {
+			Set<Integer> next = iter.next();
+			Assert.assertEquals(10, next.size());
+			res.add(next);
+		}
+		Assert.assertEquals(184756, res.size());
 	}
 
 }

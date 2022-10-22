@@ -229,10 +229,29 @@ public class JoinOptimizer {
             Map<String, TableStats> stats,
             Map<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-        // Not necessary for labs 1 and 2.
+        PlanCache cache = new PlanCache();
 
-        // TODO: some code goes here
-        return joins;
+        for (int i = 1; i <= joins.size(); i++) {
+            SubsetIterator<LogicalJoinNode> iter = new SubsetIterator<>(joins, i);
+            while (iter.hasNext()) {
+                Set<LogicalJoinNode> joinSet = iter.next();
+                double minCost = Double.MAX_VALUE;
+
+                for (LogicalJoinNode joinToRemove : joinSet) {
+                    CostCard cc = computeCostAndCardOfSubplan(stats, filterSelectivities, joinToRemove, joinSet,
+                            minCost, cache);
+                    if (cc != null) {
+                        minCost = cc.cost;
+                        cache.addPlan(joinSet, cc.cost, cc.card, cc.plan);
+                    }
+                }
+            }
+        }
+        
+        List<LogicalJoinNode> res = cache.getOrder(new HashSet<>(joins));
+        if (explain)
+            printJoins(res, cache, stats, filterSelectivities);
+        return res;
     }
 
     // ===================== Private Methods =================================
@@ -249,22 +268,19 @@ public class JoinOptimizer {
      * @param filterSelectivities the selectivities of the filters over each of the
      *                            tables
      *                            (where tables are indentified by their alias or
-     *                            name if no
-     *                            alias is given)
+     *                            name if no alias is given)
      * @param joinToRemove        the join to remove from joinSet
      * @param joinSet             the set of joins being considered
      * @param bestCostSoFar       the best way to join joinSet so far (minimum of
-     *                            previous
-     *                            invocations of computeCostAndCardOfSubplan for
-     *                            this joinSet,
-     *                            from returned CostCard)
+     *                            previous invocations of
+     *                            computeCostAndCardOfSubplan for
+     *                            this joinSet, from returned CostCard)
      * @param pc                  the PlanCache for this join; should have subplans
      *                            for all plans of size joinSet.size()-1
      * @return A {@link CostCard} objects desribing the cost, cardinality,
      *         optimal subplan
      * @throws ParsingException when stats, filterSelectivities, or pc object is
-     *                          missing
-     *                          tables involved in join
+     *                          missing tables involved in join
      */
     @SuppressWarnings("unchecked")
     private CostCard computeCostAndCardOfSubplan(
