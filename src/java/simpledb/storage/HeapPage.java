@@ -25,6 +25,7 @@ public class HeapPage implements Page {
     private byte[] header;
     private Tuple[] tuples;
     private final int numSlots;
+    private final PageLock pgLock;
 
     /*
      * For efficient deletion/insertion of tuples into the page. The freeList
@@ -63,6 +64,7 @@ public class HeapPage implements Page {
         numSlots = getNumTuples();
         freeList = new FreeList<Integer>();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
+        pgLock = new PageLock(id);
 
         // allocate and read the header slots of this page
         header = new byte[getHeaderSize()];
@@ -81,6 +83,10 @@ public class HeapPage implements Page {
         dis.close();
 
         setBeforeImage();
+    }
+
+    public PageLock getPgLock() {
+        return pgLock;
     }
 
     /**

@@ -9,8 +9,6 @@ import simpledb.transaction.TransactionId;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -86,8 +84,11 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         Page page = pidToPage.get(pid);
-        if (page != null)
+        if (page != null) {
+            grabLock(tid, page, perm);
+
             return page;
+        }
         if (pidToPage.size() == maxNumPages)
             evictPage();
         /* Read the page from disk and add to buffer. */
@@ -95,11 +96,20 @@ public class BufferPool {
             page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
             pidToPage.put(pid, page);
             mru.add(pid);
+            grabLock(tid, page, perm);
+
             return page;
         } catch (Exception e) {
             e.printStackTrace();
             throw new DbException("Fail to load page from disk\n");
         }
+    }
+
+    private void grabLock(TransactionId tid, Page page, Permissions perm) {
+        if (perm == Permissions.READ_ONLY)
+            page.getPgLock().sLock(tid);
+        if (perm == Permissions.READ_WRITE)
+            page.getPgLock().xLock(tid);
     }
 
     /**
@@ -112,8 +122,7 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        pidToPage.get(pid).getPgLock().releaseAll(tid);
     }
 
     /**
@@ -129,10 +138,11 @@ public class BufferPool {
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
-    public boolean holdsLock(TransactionId tid, PageId p) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
-        return false;
+    public boolean holdsLock(TransactionId tid, PageId pid) {
+        if (!pidToPage.containsKey(pid))
+            return false;
+        Page pg = pidToPage.get(pid);
+        return pg.getPgLock().holdsLock(tid);
     }
 
     /**
@@ -242,7 +252,13 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        pidToPage.remove(mru.evict());
+        PageId pid = mru.evict();
+        pidToPage.remove(pid);
+        try {
+            flushPage(pid);
+        } catch (Exception e) {
+            throw new DbException(String.format("Fail to flush evicted page to disk, pid: %s", pid.toString()));
+        }
     }
 
 }

@@ -170,18 +170,20 @@ public class HeapFile implements DbFile {
             HeapPage newPg = new HeapPage(
                     new HeapPageId(getId(), newPgNo),
                     HeapPage.createEmptyPageData());
-            newPg.insertTuple(t);
-
-            if (newPg.getNumUnusedSlots() > 0) {
-                freeList.append(newPgNo);
-            }
             /*
-             * NOTE(Qing): Immediately writing new page back to disk, but also mark
-             * this page dirty (adding to bufferpool) so if this transaction aborts,
-             * bufferpool should be responsible to clean it up.
+             * NOTE(Qing): Immediately writing new page back to disk, and read it back from
+             * the buffer pool.
              */
             writePage(newPg);
-            res.add(newPg);
+
+            HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(), newPgNo),
+                    Permissions.READ_WRITE);
+            pg.insertTuple(t);
+
+            if (pg.getNumUnusedSlots() > 0) {
+                freeList.append(newPgNo);
+            }
+            res.add(pg);
 
         } else {
             int pgNo = freeList.peek();

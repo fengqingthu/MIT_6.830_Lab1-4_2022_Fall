@@ -4,7 +4,7 @@ import simpledb.transaction.TransactionId;
 
 /**
  * Page is the interface used to represent pages that are resident in the
- * BufferPool.  Typically, DbFiles will read and write pages from disk.
+ * BufferPool. Typically, DbFiles will read and write pages from disk.
  * <p>
  * Pages may be "dirty", indicating that they have been modified since they
  * were last written out to disk.
@@ -15,7 +15,7 @@ import simpledb.transaction.TransactionId;
 public interface Page {
 
     /**
-     * Return the id of this page.  The id is a unique identifier for a page
+     * Return the id of this page. The id is a unique identifier for a page
      * that can be used to look up the page on disk or determine if the page
      * is resident in the buffer pool.
      *
@@ -24,7 +24,8 @@ public interface Page {
     PageId getId();
 
     /**
-     * Get the id of the transaction that last dirtied this page, or null if the page is clean..
+     * Get the id of the transaction that last dirtied this page, or null if the
+     * page is clean..
      *
      * @return The id of the transaction that last dirtied this page, or null
      */
@@ -50,7 +51,7 @@ public interface Page {
 
     /**
      * Provide a representation of this page before any modifications were made
-     * to it.  Used by recovery.
+     * to it. Used by recovery.
      */
     Page getBeforeImage();
 
@@ -59,4 +60,7 @@ public interface Page {
      * copy current content to the before image.
      */
     void setBeforeImage();
+
+    /** Access the lock associated with this page. */
+    PageLock getPgLock();
 }
