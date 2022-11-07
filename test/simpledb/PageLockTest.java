@@ -12,6 +12,7 @@ import simpledb.storage.HeapPageId;
 import simpledb.storage.PageId;
 import simpledb.storage.PageLock;
 import simpledb.systemtest.SimpleDbTestBase;
+import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 /** Unit test for PageLock. */
@@ -38,13 +39,21 @@ public class PageLockTest extends SimpleDbTestBase {
     if (perm == Permissions.READ_ONLY) {
       t = new Thread() {
         public void run() {
-          lock.sLock(tid);
+          try {
+            lock.sLock(tid);
+          } catch (TransactionAbortedException e) {
+            return;
+          }
         }
       };
     } else {
       t = new Thread() {
         public void run() {
-          lock.xLock(tid);
+          try {
+            lock.xLock(tid);
+          } catch (TransactionAbortedException e) {
+            return;
+          }
         }
       };
     }

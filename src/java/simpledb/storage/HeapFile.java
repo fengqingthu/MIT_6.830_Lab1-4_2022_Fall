@@ -30,8 +30,12 @@ public class HeapFile implements DbFile {
     /*
      * For efficient deletion/insertion of tuples into the file. The freeList
      * maintains a stack of page numbers that has empty slot(s).
+     * 
+     * Note(Qing): This is implemented in Lab2 but deprecated in Lab4 as we do not
+     * want a table-level lock while there can be concurrent updates to freeLists in
+     * table-level. However, page-level freeLists remain the same.
      */
-    private FreeList<Integer> freeList;
+    // private FreeList<Integer> freeList;
 
     /**
      * Constructs a heap file backed by the specified file.
@@ -49,8 +53,6 @@ public class HeapFile implements DbFile {
             e.printStackTrace();
             System.exit(1); // file is corrupted.
         }
-        freeList = new FreeList<Integer>();
-        populateFreeList();
     }
 
     /**
@@ -84,32 +86,6 @@ public class HeapFile implements DbFile {
         return td;
     }
 
-    /*
-     * Scan through the page headers of the given file and build the freeList and
-     * freeMap data structures. Should be called by the constructor.
-     */
-    private void populateFreeList() {
-        int pgHeaderSize = getPageHeaderSize();
-        for (int pgNo = 0; pgNo < numPages(); pgNo++) {
-            try {
-                rFile.seek(pgNo * BufferPool.getPageSize());
-                byte[] header = new byte[pgHeaderSize];
-                rFile.readFully(header, 0, pgHeaderSize);
-
-                /* If contains at least one empty slot, add to freeList. */
-                for (int i = 0; i < pgHeaderSize; i++) {
-                    if (header[i] != (byte) ~0) {
-                        freeList.append(pgNo);
-                        break;
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-                System.exit(1); // file is corrupted
-            }
-        }
-    }
-
     /* Helper method to calculate page header size based on the schema. */
     private int getPageHeaderSize() {
         int numTuples = (int) Math.floor((BufferPool.getPageSize() * 8f) / (td.getSize() * 8f + 1f));
@@ -141,14 +117,6 @@ public class HeapFile implements DbFile {
         int pgNo = page.getId().getPageNumber();
         rFile.seek(pgNo * BufferPool.getPageSize());
         rFile.write(page.getPageData(), 0, BufferPool.getPageSize());
-
-        /* Need to update the freeList. */
-        HeapPage hpg = (HeapPage) page;
-        if (hpg.getNumUnusedSlots() > 0 && !freeList.contains(pgNo)) {
-            freeList.append(pgNo);
-        } else if (hpg.getNumUnusedSlots() == 0 && freeList.contains(pgNo)) {
-            freeList.remove(pgNo);
-        }
     }
 
     /**
@@ -163,41 +131,54 @@ public class HeapFile implements DbFile {
     public List<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         ArrayList<Page> res = new ArrayList<Page>();
-
-        if (freeList.size() == 0) {
+        int pgNo = findFreePage(tid);
+        if (pgNo == -1) {
             /* Need to allocate a new page on disk. */
             int newPgNo = numPages();
+            HeapPageId newPid = new HeapPageId(getId(), newPgNo);
             HeapPage newPg = new HeapPage(
-                    new HeapPageId(getId(), newPgNo),
+                    newPid,
                     HeapPage.createEmptyPageData());
             /*
-             * NOTE(Qing): Immediately writing new page back to disk, and read it back from
+             * NOTE(Qing): Immediately writing empty new page to disk, and read it back from
              * the buffer pool.
              */
             writePage(newPg);
 
-            HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(), newPgNo),
+            HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, newPid,
                     Permissions.READ_WRITE);
             pg.insertTuple(t);
-
-            if (pg.getNumUnusedSlots() > 0) {
-                freeList.append(newPgNo);
-            }
             res.add(pg);
 
         } else {
-            int pgNo = freeList.peek();
             HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(), pgNo),
                     Permissions.READ_WRITE);
             pg.insertTuple(t);
-
-            /* If this page newly becomes full, remove it from freeList. */
-            if (pg.getNumUnusedSlots() == 0) {
-                freeList.remove(pgNo);
-            }
             res.add(pg);
         }
         return res;
+    }
+
+    /**
+     * Scan through all pages in this table looking for a page with at least one
+     * empty slot.
+     * 
+     * @return the pageNo if a free page exists, otherwise -1.
+     */
+    private int findFreePage(TransactionId tid) throws TransactionAbortedException, DbException {
+        for (int i = numPages() - 1; i >= 0; i--) {
+            HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(getId(), i),
+                    Permissions.READ_ONLY);
+            if (pg.getNumUnusedSlots() > 0) {
+                return i;
+            }
+            /*
+             * Note(Qing): Here, can safely release the read lock if no empty slot found in
+             * this page. This read-only op does not affect consistency.
+             */
+            pg.getPgLock().sUnlock(tid);
+        }
+        return -1;
     }
 
     // see DbFile.java for javadocs
@@ -210,10 +191,7 @@ public class HeapFile implements DbFile {
         HeapPage pg = (HeapPage) Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(),
                 Permissions.READ_WRITE);
         pg.deleteTuple(t);
-        /* If this page newly becomes available, add it to freeList. */
-        if (pg.getNumUnusedSlots() == 1) {
-            freeList.append(t.getRecordId().getPageId().getPageNumber());
-        }
+
         res.add(pg);
         return res;
     }

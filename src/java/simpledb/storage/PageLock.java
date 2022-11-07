@@ -1,13 +1,14 @@
 package simpledb.storage;
 
+import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.List;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 /**
@@ -18,7 +19,8 @@ import simpledb.transaction.TransactionId;
  * 
  * This PageLock implements two seperate thread pools, where shared-lock
  * requests are prioritized as multiple transactions may progress, and a
- * queue-based lottery to avoid herd effect.
+ * queue-based lottery to avoid herd effect, where younger transactions are
+ * prioritized.
  */
 public class PageLock {
     private final PageId pid;
@@ -32,7 +34,7 @@ public class PageLock {
         xHolder = null;
         sHolder = new HashSet<>();
         sPool = new HashSet<>();
-        xQueue = new LinkedList<>();
+        xQueue = new ArrayList<>();
     }
 
     public PageId getPid() {
@@ -53,7 +55,7 @@ public class PageLock {
      * If the transaction already holds the sLock, this method simply returns
      * instead of throwing an exception. No downgrading ever incurred.
      */
-    public void sLock(TransactionId tid) {
+    public void sLock(TransactionId tid) throws TransactionAbortedException {
         Lock lock = new ReentrantLock();
         Condition cond = lock.newCondition();
         Ticket ticket = new Ticket(tid, cond);
@@ -78,10 +80,9 @@ public class PageLock {
                 }
             }
         } catch (InterruptedException e) {
-            /* If the thread is interrupted, simply retry. */
             sPool.remove(ticket);
             lock.unlock();
-            sLock(tid);
+            throw new TransactionAbortedException();
         }
     }
 
@@ -89,7 +90,7 @@ public class PageLock {
      * If the transaction already holds the sLock, this method simply returns
      * instead of throwing an exception. No upgrading assumed.
      */
-    public void xLock(TransactionId tid) {
+    public void xLock(TransactionId tid) throws TransactionAbortedException {
         Lock lock = new ReentrantLock();
         Condition cond = lock.newCondition();
         Ticket ticket = new Ticket(tid, cond);
@@ -108,10 +109,9 @@ public class PageLock {
                 }
             }
         } catch (InterruptedException e) {
-            /* If the thread is interrupted, simply retry. */
             xQueue.remove(ticket);
             lock.unlock();
-            xLock(tid);
+            throw new TransactionAbortedException();
         }
     }
 
@@ -229,6 +229,8 @@ public class PageLock {
                 }
                 sPool.clear();
             } else if (!xQueue.isEmpty()) {
+                // Sort queue in descending order, i.e. prioritize younger transactions.
+                xQueue.sort(((t1, t2) -> (int) (t2.tid.getId() - t1.tid.getId())));
                 Ticket winner = xQueue.remove(0);
                 winner.cond.signalAll();
             }

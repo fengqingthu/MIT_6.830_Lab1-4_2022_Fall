@@ -22,11 +22,11 @@ public class MRUList<E> {
         h = new HashMap<E, Integer>();
     }
 
-    public int size() {
+    public synchronized int size() {
         return h.size();
     }
 
-    private void append(E e) {
+    private synchronized void append(E e) {
         h.put(e, ll.size());
         ll.addLast(e);
     }
@@ -38,7 +38,7 @@ public class MRUList<E> {
      * @param e the element to add.
      * @return the evicted element or null if no eviction happens.
      */
-    public E add(E e) {
+    public synchronized E add(E e) {
         if (h.containsKey(e)) {
             ll.remove(h.get(e));
             append(e);
@@ -59,7 +59,7 @@ public class MRUList<E> {
      * 
      * @return the evicted element or null if mru is empty.
      */
-    public E evict() {
+    public synchronized E evict() {
         if (size() == 0)
             return null;
         E res = ll.removeLast();
@@ -72,7 +72,7 @@ public class MRUList<E> {
      * 
      * @param e the element to remove.
      */
-    public void remove(E e) {
+    public synchronized void remove(E e) {
         if (!h.containsKey(e))
             return;
         ll.remove(h.get(e));
