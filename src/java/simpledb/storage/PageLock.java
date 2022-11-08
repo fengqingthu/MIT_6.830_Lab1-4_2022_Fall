@@ -8,6 +8,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import simpledb.common.Database;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -19,8 +20,7 @@ import simpledb.transaction.TransactionId;
  * 
  * This PageLock implements two seperate thread pools, where shared-lock
  * requests are prioritized as multiple transactions may progress, and a
- * queue-based lottery to avoid herd effect, where younger transactions are
- * prioritized.
+ * queue-based lottery to avoid herd effect.
  */
 public class PageLock {
     private final PageId pid;
@@ -44,10 +44,12 @@ public class PageLock {
     private class Ticket {
         private final TransactionId tid;
         private final Condition cond;
+        private final Lock lock;
 
-        public Ticket(TransactionId tid, Condition cond) {
+        public Ticket(TransactionId tid, Condition cond, Lock lock) {
             this.tid = tid;
             this.cond = cond;
+            this.lock = lock;
         }
     }
 
@@ -58,7 +60,7 @@ public class PageLock {
     public void sLock(TransactionId tid) throws TransactionAbortedException {
         Lock lock = new ReentrantLock();
         Condition cond = lock.newCondition();
-        Ticket ticket = new Ticket(tid, cond);
+        Ticket ticket = new Ticket(tid, cond, lock);
         lock.lock();
         /*
          * Note(Qing): Here we explictly release the lock instead of using a finally
@@ -72,15 +74,22 @@ public class PageLock {
                 return;
             }
             while (true) {
-                sPool.add(ticket);
+                synchronized (this) {
+                    sPool.add(ticket);
+                }
+                Database.getBufferPool().getDLHandler().waitFor(tid, this);
                 cond.await();
                 if (trySLock(tid)) {
+                    Database.getBufferPool().getDLHandler().unwait(tid, this);
                     lock.unlock();
                     return;
                 }
             }
         } catch (InterruptedException e) {
-            sPool.remove(ticket);
+            /* The deadlock handler may force this transaction to abort by interrupts. */
+            synchronized (this) {
+                sPool.remove(ticket);
+            }
             lock.unlock();
             throw new TransactionAbortedException();
         }
@@ -93,7 +102,7 @@ public class PageLock {
     public void xLock(TransactionId tid) throws TransactionAbortedException {
         Lock lock = new ReentrantLock();
         Condition cond = lock.newCondition();
-        Ticket ticket = new Ticket(tid, cond);
+        Ticket ticket = new Ticket(tid, cond, lock);
         lock.lock();
         try {
             if (tryXLock(tid)) {
@@ -101,15 +110,21 @@ public class PageLock {
                 return;
             }
             while (true) {
-                xQueue.add(ticket);
+                synchronized (this) {
+                    xQueue.add(ticket);
+                }
+                Database.getBufferPool().getDLHandler().waitFor(tid, this);
                 cond.await();
                 if (tryXLock(tid)) {
+                    Database.getBufferPool().getDLHandler().unwait(tid, this);
                     lock.unlock();
                     return;
                 }
             }
         } catch (InterruptedException e) {
-            xQueue.remove(ticket);
+            synchronized (this) {
+                xQueue.remove(ticket);
+            }
             lock.unlock();
             throw new TransactionAbortedException();
         }
@@ -155,6 +170,18 @@ public class PageLock {
         return holdsSLock(tid) || holdsXLock(tid);
     }
 
+    public synchronized Set<TransactionId> getHolders() {
+        if (!sHolder.isEmpty()) {
+            return sHolder;
+        }
+        HashSet<TransactionId> res = new HashSet<>();
+        if (xHolder != null) {
+            res.add(xHolder);
+            return res;
+        }
+        return res;
+    }
+
     /* For test use. */
     public synchronized boolean holdsSLock(TransactionId tid) {
         return sHolder.contains(tid);
@@ -198,41 +225,22 @@ public class PageLock {
     private synchronized void lottery() {
         if (xHolder == null) {
             /*
-             * An edge case where a single transaction requests both sLock and xLock,
-             * although it should never happen as the transaction can simply request a
-             * xLock.
-             */
-            if (sPool.size() == 1) {
-                for (Ticket st : sPool) {
-                    st.cond.signalAll();
-                    TransactionId stid = st.tid;
-                    // If the transaction also requests for a xLock, grant it.
-                    for (Ticket t : xQueue) {
-                        if (t.tid == stid) {
-                            t.cond.signalAll();
-                            break; // A transaction should have only one ticket in the queue.
-                        }
-                    }
-                    xQueue.removeIf(t -> t.tid == stid);
-                }
-                sPool.clear();
-                return;
-            }
-            /*
              * Note(Qing): We first have all sLocks granted together but only notify one
              * single winner among xLock requests to avoid herd effect.
              * However, can xLock requests starve?
              */
-            if (sPool.size() > 1) {
+            if (!sPool.isEmpty()) {
                 for (Ticket t : sPool) {
+                    t.lock.lock();
                     t.cond.signalAll();
+                    t.lock.unlock();
                 }
                 sPool.clear();
             } else if (!xQueue.isEmpty()) {
-                // Sort queue in descending order, i.e. prioritize younger transactions.
-                xQueue.sort(((t1, t2) -> (int) (t2.tid.getId() - t1.tid.getId())));
                 Ticket winner = xQueue.remove(0);
+                winner.lock.lock();
                 winner.cond.signalAll();
+                winner.lock.unlock();
             }
         }
     }

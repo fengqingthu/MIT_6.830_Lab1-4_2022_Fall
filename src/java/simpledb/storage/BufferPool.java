@@ -33,7 +33,9 @@ public class BufferPool {
 
     private final int maxNumPages;
     private final ConcurrentHashMap<PageId, Page> pidToPage;
-    private final ConcurrentHashMap<TransactionId, Set<PageLock>> lockMap;
+
+    private final LockManager lManager = new LockManager();
+    private final DeadLockHandler dlHandler = new DeadLockHandler();
 
     private final MRUList<PageId> mru;
 
@@ -51,13 +53,12 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         maxNumPages = numPages;
-        pidToPage = new ConcurrentHashMap<PageId, Page>();
+        pidToPage = new ConcurrentHashMap<>();
         mru = new MRUList<PageId>(numPages);
-        lockMap = new ConcurrentHashMap<>();
     }
 
-    public ConcurrentHashMap<TransactionId, Set<PageLock>> getLockMap() {
-        return lockMap;
+    public DeadLockHandler getDLHandler() {
+        return dlHandler;
     }
 
     public static int getPageSize() {
@@ -93,7 +94,7 @@ public class BufferPool {
             throws TransactionAbortedException, DbException {
         Page page = pidToPage.get(pid);
         if (page != null) {
-            grabLock(tid, page, perm);
+            lManager.grabLock(tid, page, perm);
 
             return page;
         }
@@ -104,24 +105,13 @@ public class BufferPool {
             page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
             pidToPage.put(pid, page);
             mru.add(pid);
-            grabLock(tid, page, perm);
+            lManager.grabLock(tid, page, perm);
 
             return page;
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new DbException("Fail to load page from disk\n");
+            System.out.println("Fail to load page from disk");
+            throw new TransactionAbortedException();
         }
-    }
-
-    private void grabLock(TransactionId tid, Page page, Permissions perm) throws TransactionAbortedException {
-        if (!lockMap.containsKey(tid)) {
-            lockMap.put(tid, new HashSet<PageLock>());
-        }
-        lockMap.get(tid).add(page.getPgLock());
-        if (perm == Permissions.READ_ONLY)
-            page.getPgLock().sLock(tid);
-        if (perm == Permissions.READ_WRITE)
-            page.getPgLock().xLock(tid);
     }
 
     /**
@@ -134,9 +124,7 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
-        PageLock lock = pidToPage.get(pid).getPgLock();
-        lock.releaseAll(tid);
-        lockMap.get(tid).remove(lock);
+        lManager.unsafeRelease(tid, pidToPage.get(pid));
     }
 
     /**
@@ -154,8 +142,7 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId pid) {
         if (!pidToPage.containsKey(pid))
             return false;
-        Page pg = pidToPage.get(pid);
-        return pg.getPgLock().holdsLock(tid);
+        return pidToPage.get(pid).getPgLock().holdsLock(tid);
     }
 
     /**
@@ -179,13 +166,7 @@ public class BufferPool {
                 System.exit(1); // FORCE is broken, exit.
             }
         }
-
-        if (lockMap.containsKey(tid)) {
-            for (PageLock lock: lockMap.get(tid)) {
-                lock.releaseAll(tid);
-            }
-            lockMap.remove(tid);
-        }
+        lManager.releaseAll(tid);
     }
 
     /**
@@ -288,7 +269,11 @@ public class BufferPool {
         ArrayList<PageId> dirtyPages = new ArrayList<>();
         PageId pid = mru.evict();
 
-        while (pidToPage.get(pid).isDirty() != null) {
+        /*
+         * Enforce NO STEAL here: never evict dirty pages or pages that are currently
+         * locked by active transactions.
+         */
+        while (pidToPage.get(pid).isDirty() != null || lManager.isLocked(pidToPage.get(pid))) {
             dirtyPages.add(pid);
             pid = mru.evict();
             if (pid == null) {
