@@ -1,10 +1,10 @@
 package simpledb.storage;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Random;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -17,16 +17,14 @@ import simpledb.transaction.TransactionId;
  */
 public class DeadLockHandler {
     private static final long INTERVAL = 10;
-    private static final long THRESHOLD = 100;
+    private static final long THRESHOLD = 500;
     private long lastUpdate;
     private long lastCheck;
-    private final Random rand;
     private final HashMap<TransactionId, Set<PageLock>> waitMap;
     private final HashMap<TransactionId, Thread> threadMap;
 
     public DeadLockHandler() {
         lastCheck = lastUpdate = System.currentTimeMillis();
-        rand = new Random();
         waitMap = new HashMap<>();
         threadMap = new HashMap<>();
         // Kick-off a thread in background that periodically detects and handles
@@ -69,61 +67,57 @@ public class DeadLockHandler {
 
     private synchronized void detectDeadLock() {
         /*
-         * Building wait-for graph and detect for cycles can be rather expensive. Only
-         * do so after the wait-for graph pauses for a time threshold.
+         * Building wait-for graph and detect for all cycles can be rather expensive.
+         * Only do so after the wait-for graph has paused for a rather large time
+         * threshold.
          */
         long now = System.currentTimeMillis();
         if (now - lastUpdate < THRESHOLD || now - lastCheck < THRESHOLD) {
             return;
         }
         lastCheck = now;
-        // System.out.println(
-        //         String.format("[%d], A deadlock may have occured, building wait-for graph and doing DFS", now));
 
-        // Full-BFS for cycle-detection
-        Set<TransactionId> seen = new HashSet<>();
+        Set<Set<TransactionId>> cycles = new HashSet<>();
+
         for (TransactionId root : waitMap.keySet()) {
-            if (!seen.contains(root)) {
+            List<TransactionId> path = new ArrayList<>(Arrays.asList(root));
+            dfs(root, path, cycles);
+        }
 
-                Set<TransactionId> currLevel = new HashSet<>(Arrays.asList(root));
-                while (!currLevel.isEmpty()) {
-                    Set<TransactionId> nextLevel = new HashSet<>();
-                    for (TransactionId node : currLevel) {
-                        if (waitMap.containsKey(node)) {
-                            for (PageLock lock : waitMap.get(node)) {
-                                nextLevel.addAll(lock.getHolders());
-                            }
-                        }
+        // WAIT-WOUND: If cycles detected, abort the youngest transactions.
+        if (!cycles.isEmpty()) {
+            Set<TransactionId> toAbort = new HashSet<>();
+
+            // System.out.println(String.format("%d cycles detected.", cycles.size()));
+            for (Set<TransactionId> cycle : cycles) {
+                TransactionId t = null;
+                long mx = Long.MIN_VALUE;
+                for (TransactionId node : cycle) {
+                    if (node.getId() > mx) {
+                        mx = node.getId();
+                        t = node;
                     }
+                }
+                toAbort.add(t);
+            }
 
-                    if (!Collections.disjoint(seen, nextLevel)) {
-                        System.out.println("Cycle detected");
+            toAbort.forEach(tid -> abort(tid));
+        }
+    }
 
-                        HashSet<TransactionId> ends = new HashSet<>(seen);
-                        ends.retainAll(nextLevel);
-                        /*
-                         * At lease one cycle is detected. Randomly determined to abort the end points
-                         * (most likely the root), or the nodes the end points wait on.
-                         */
-                        if (rand.nextDouble() < 2f) {
-                            System.out.println("Aborting ends");
-                            for (TransactionId t : ends) {
-                                abort(t);
-                            }
-                        } else {
-                            System.out.println("Aborting ends' next hop");
-                            for (TransactionId node : ends) {
-                                for (PageLock lock : waitMap.get(node)) {
-                                    for (TransactionId t : lock.getHolders()) {
-                                        abort(t);
-                                    }
-                                }
-                            }
-                        }
-                        return;
-                    } else {
-                        seen.addAll(nextLevel);
-                        currLevel = nextLevel;
+    /* Brute-force for all-simple-cycle-detection: simply run DFS on all nodes. */
+    private void dfs(TransactionId node, List<TransactionId> path, Set<Set<TransactionId>> cycles) {
+        if (waitMap.containsKey(node)) {
+            for (PageLock lock : waitMap.get(node)) {
+                for (TransactionId child : lock.getHolders()) {
+                    if (child == path.get(0) && path.size() > 1) {
+                        cycles.add(new HashSet<>(path));
+                        continue;
+                    }
+                    if (!path.contains(child)) {
+                        path.add(child);
+                        dfs(child, path, cycles);
+                        path.remove(child);
                     }
                 }
             }
@@ -133,7 +127,8 @@ public class DeadLockHandler {
     private void abort(TransactionId tid) {
         /*
          * Note(Qing): A hack protection against interrupting some random threads
-         * that are not wating for locks.
+         * that are not wating for locks, which may cause errors as InterruptedException
+         * would be caught somewhere else.
          */
         StackTraceElement[] s = threadMap.get(tid).getStackTrace();
         boolean found = false;
