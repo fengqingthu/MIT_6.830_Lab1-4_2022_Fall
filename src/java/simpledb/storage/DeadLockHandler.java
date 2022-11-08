@@ -13,7 +13,16 @@ import java.util.concurrent.TimeUnit;
 import simpledb.transaction.TransactionId;
 
 /**
- * A helper class to detect and handle deadlocks.
+ * A helper class to detect and handle deadlocks, implementing a quite
+ * passive deadlock handling mechansim - the deadlock handler essentially
+ * kicks off a background thread that builds the wait-for graph and detects
+ * all cycles, only when the waitMap has paused for a wide time threshold.
+ * 
+ * The rationale is that the holders of locks are frequently changing, so the
+ * wait-for graph also varies quickly and it would be really expensive to
+ * track the wait-for graph in real-time and detect any incoming cycles. We
+ * kinda "batchlize" the cycles within the time threshold and only abort
+ * when we really have to do so.
  */
 public class DeadLockHandler {
     private static final long INTERVAL = 10;
@@ -65,6 +74,12 @@ public class DeadLockHandler {
             waitMap.get(tid).remove(lock);
     }
 
+    /**
+     * The whole deadlock handler class is synchronized so we know when this method
+     * is running, the state of waitMap is determined. Since grabing locks
+     * involves changing the waitMap, we know the wait-for graph to be built is
+     * also determined.
+     */
     private synchronized void detectDeadLock() {
         /*
          * Building wait-for graph and detect for all cycles can be rather expensive.
@@ -79,6 +94,7 @@ public class DeadLockHandler {
 
         Set<Set<TransactionId>> cycles = new HashSet<>();
 
+        /* Brute-force for all-simple-cycle-detection: simply run DFS on all nodes. */
         for (TransactionId root : waitMap.keySet()) {
             List<TransactionId> path = new ArrayList<>(Arrays.asList(root));
             dfs(root, path, cycles);
@@ -105,7 +121,13 @@ public class DeadLockHandler {
         }
     }
 
-    /* Brute-force for all-simple-cycle-detection: simply run DFS on all nodes. */
+    /**
+     * Recursive Depth-First-Search.
+     * 
+     * @param node   The current node to visit.
+     * @param path   The current visiting path. The first element is the start.
+     * @param cycles Found cycles are added into this set.
+     */
     private void dfs(TransactionId node, List<TransactionId> path, Set<Set<TransactionId>> cycles) {
         if (waitMap.containsKey(node)) {
             for (PageLock lock : waitMap.get(node)) {
@@ -124,6 +146,10 @@ public class DeadLockHandler {
         }
     }
 
+    /**
+     * Abort a given transaction by sending an interruption to it. We only do so
+     * when the thread is confirmed waiting on certain lock, by a nasty hack.
+     */
     private void abort(TransactionId tid) {
         /*
          * Note(Qing): A hack protection against interrupting some random threads
@@ -139,7 +165,6 @@ public class DeadLockHandler {
         if (!found)
             return;
 
-        // Send the corresponding thread an interruption to abort it.
         threadMap.get(tid).interrupt();
     }
 

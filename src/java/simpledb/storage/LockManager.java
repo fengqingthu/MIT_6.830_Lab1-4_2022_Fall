@@ -10,7 +10,14 @@ import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 /**
- * A helper class to detect and handle deadlocks.
+ * A helper class as an entry point for transactions acquiring or releasing
+ * locks. Individual locks are tied to the specific pages and the manager
+ * essentially only maintains a map of what locks a transaction currently holds.
+ * 
+ * The lockMap is thread-safe so this lock manager does not involve any
+ * synchronization. The rationale is basically we do not want the lock manager
+ * to become a single bottleneck but choose to scatter the synchronization
+ * needed to all individual page-level locks.
  */
 public class LockManager {
     private final ConcurrentHashMap<TransactionId, Set<PageLock>> lockMap;
@@ -48,7 +55,7 @@ public class LockManager {
     public void releaseAll(TransactionId tid) {
         Database.getBufferPool().getDLHandler().unwaitAll(tid);
         if (lockMap.containsKey(tid)) {
-            for (PageLock lock: lockMap.get(tid)) {
+            for (PageLock lock : lockMap.get(tid)) {
                 lock.releaseAll(tid);
             }
             lockMap.remove(tid);

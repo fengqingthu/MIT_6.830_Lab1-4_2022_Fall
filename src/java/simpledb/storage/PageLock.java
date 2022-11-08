@@ -122,6 +122,7 @@ public class PageLock {
                 }
             }
         } catch (InterruptedException e) {
+            /* The deadlock handler may force this transaction to abort by interrupts. */
             synchronized (this) {
                 xQueue.remove(ticket);
             }
@@ -225,7 +226,7 @@ public class PageLock {
     private synchronized void lottery() {
         if (xHolder == null) {
             /*
-             * Note(Qing): We first have all sLocks granted together but only notify one
+             * Note(Qing): We have all sLocks granted together but only notify one
              * single winner among xLock requests to avoid herd effect.
              * However, can xLock requests starve?
              */

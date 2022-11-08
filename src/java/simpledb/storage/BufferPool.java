@@ -38,7 +38,6 @@ public class BufferPool {
     private final LockManager lManager = new LockManager();
     private final DeadLockHandler dlHandler = new DeadLockHandler();
 
-
     /**
      * Default number of pages passed to the constructor. This is used by
      * other classes. BufferPool should use the numPages argument to the
@@ -57,6 +56,10 @@ public class BufferPool {
         mru = new MRUList<PageId>(numPages);
     }
 
+    /**
+     * This API is essentially for PageLock to grab a handle to the deadlock
+     * handler. Dirty but works fine.
+     */
     public DeadLockHandler getDLHandler() {
         return dlHandler;
     }
@@ -113,7 +116,7 @@ public class BufferPool {
                 pidToPage.put(pid, page);
                 mru.add(pid);
             }
-            
+
             lManager.grabLock(tid, page, perm);
             return page;
         } catch (Exception e) {
