@@ -58,7 +58,8 @@ public class BufferPool {
 
     /**
      * This API is essentially for PageLock to grab a handle to the deadlock
-     * handler. Dirty but works fine.
+     * handler. Dirty but works fine. A better idea may be a global deadlock
+     * handler instance.
      */
     public DeadLockHandler getDLHandler() {
         return dlHandler;

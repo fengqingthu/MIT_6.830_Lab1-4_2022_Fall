@@ -64,7 +64,7 @@ public class HeapPage implements Page {
         numSlots = getNumTuples();
         freeList = new FreeList<Integer>();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
-        pgLock = new PageLock(id);
+        pgLock = new PageLock(id, Database.getBufferPool().getDLHandler());
 
         // allocate and read the header slots of this page
         header = new byte[getHeaderSize()];

@@ -47,15 +47,6 @@ public class DeadLockHandler {
         executor.scheduleAtFixedRate(detector, INTERVAL, INTERVAL, TimeUnit.MILLISECONDS);
     }
 
-    public synchronized void unwaitAll(TransactionId tid) {
-        lastUpdate = System.currentTimeMillis();
-
-        if (waitMap.containsKey(tid)) {
-            waitMap.remove(tid);
-        }
-        threadMap.remove(tid);
-    }
-
     public synchronized void waitFor(TransactionId tid, PageLock lock) {
         lastUpdate = System.currentTimeMillis();
 
@@ -70,6 +61,7 @@ public class DeadLockHandler {
     public synchronized void unwait(TransactionId tid, PageLock lock) {
         lastUpdate = System.currentTimeMillis();
 
+        threadMap.remove(tid);
         if (waitMap.containsKey(tid))
             waitMap.get(tid).remove(lock);
     }

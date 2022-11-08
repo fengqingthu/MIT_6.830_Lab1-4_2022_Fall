@@ -8,7 +8,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import simpledb.common.Database;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -28,9 +27,11 @@ public class PageLock {
     private final Set<TransactionId> sHolder;
     private final Set<Ticket> sPool;
     private final List<Ticket> xQueue;
+    private final DeadLockHandler dlHandler;
 
-    public PageLock(PageId pid) {
+    public PageLock(PageId pid, DeadLockHandler dlHandler) {
         this.pid = pid;
+        this.dlHandler = dlHandler;
         xHolder = null;
         sHolder = new HashSet<>();
         sPool = new HashSet<>();
@@ -77,10 +78,10 @@ public class PageLock {
                 synchronized (this) {
                     sPool.add(ticket);
                 }
-                Database.getBufferPool().getDLHandler().waitFor(tid, this);
+                dlHandler.waitFor(tid, this);
                 cond.await();
                 if (trySLock(tid)) {
-                    Database.getBufferPool().getDLHandler().unwait(tid, this);
+                    dlHandler.unwait(tid, this);
                     lock.unlock();
                     return;
                 }
@@ -113,10 +114,10 @@ public class PageLock {
                 synchronized (this) {
                     xQueue.add(ticket);
                 }
-                Database.getBufferPool().getDLHandler().waitFor(tid, this);
+                dlHandler.waitFor(tid, this);
                 cond.await();
                 if (tryXLock(tid)) {
-                    Database.getBufferPool().getDLHandler().unwait(tid, this);
+                    dlHandler.unwait(tid, this);
                     lock.unlock();
                     return;
                 }
@@ -163,6 +164,7 @@ public class PageLock {
                 sHolder.remove(tid);
             xQueue.removeIf(t -> t.tid == tid);
             sPool.removeIf(t -> t.tid == tid);
+            dlHandler.unwait(tid, this);
         }
         lottery();
     }
