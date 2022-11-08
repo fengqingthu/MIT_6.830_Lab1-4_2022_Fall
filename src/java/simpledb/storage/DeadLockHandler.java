@@ -16,8 +16,8 @@ import simpledb.transaction.TransactionId;
  * A helper class to detect and handle deadlocks.
  */
 public class DeadLockHandler {
-    private static final long INTERVAL = 200;
-    private static final long THRESHOLD = 1000;
+    private static final long INTERVAL = 10;
+    private static final long THRESHOLD = 100;
     private long lastUpdate;
     private long lastCheck;
     private final Random rand;
@@ -46,6 +46,7 @@ public class DeadLockHandler {
         if (waitMap.containsKey(tid)) {
             waitMap.remove(tid);
         }
+        threadMap.remove(tid);
     }
 
     public synchronized void waitFor(TransactionId tid, PageLock lock) {
@@ -77,10 +78,9 @@ public class DeadLockHandler {
         }
         lastCheck = now;
         // System.out.println(
-        // String.format("[%d], A deadlock may have occured, building wait-for graph and
-        // doing DFS", now - start));
+        //         String.format("[%d], A deadlock may have occured, building wait-for graph and doing DFS", now));
 
-        // Full-DFS for cycle-detection
+        // Full-BFS for cycle-detection
         Set<TransactionId> seen = new HashSet<>();
         for (TransactionId root : waitMap.keySet()) {
             if (!seen.contains(root)) {
@@ -105,7 +105,7 @@ public class DeadLockHandler {
                          * At lease one cycle is detected. Randomly determined to abort the end points
                          * (most likely the root), or the nodes the end points wait on.
                          */
-                        if (rand.nextDouble() < 0.5) {
+                        if (rand.nextDouble() < 2f) {
                             System.out.println("Aborting ends");
                             for (TransactionId t : ends) {
                                 abort(t);
@@ -131,6 +131,19 @@ public class DeadLockHandler {
     }
 
     private void abort(TransactionId tid) {
+        /*
+         * Note(Qing): A hack protection against interrupting some random threads
+         * that are not wating for locks.
+         */
+        StackTraceElement[] s = threadMap.get(tid).getStackTrace();
+        boolean found = false;
+        for (StackTraceElement elt : s) {
+            if (elt.getMethodName().contains("xLock") || elt.getMethodName().contains("sLock"))
+                found = true;
+        }
+        if (!found)
+            return;
+
         // Send the corresponding thread an interruption to abort it.
         threadMap.get(tid).interrupt();
     }

@@ -33,11 +33,11 @@ public class BufferPool {
 
     private final int maxNumPages;
     private final ConcurrentHashMap<PageId, Page> pidToPage;
+    private final MRUList<PageId> mru;
 
     private final LockManager lManager = new LockManager();
     private final DeadLockHandler dlHandler = new DeadLockHandler();
 
-    private final MRUList<PageId> mru;
 
     /**
      * Default number of pages passed to the constructor. This is used by
@@ -92,21 +92,29 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        Page page = pidToPage.get(pid);
+        Page page;
+        synchronized (this) {
+            page = pidToPage.get(pid);
+        }
+
         if (page != null) {
             lManager.grabLock(tid, page, perm);
 
             return page;
         }
-        if (pidToPage.size() == maxNumPages)
-            evictPage();
+        synchronized (this) {
+            if (pidToPage.size() == maxNumPages)
+                evictPage();
+        }
         /* Read the page from disk and add to buffer. */
         try {
-            page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
-            pidToPage.put(pid, page);
-            mru.add(pid);
+            synchronized (this) {
+                page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+                pidToPage.put(pid, page);
+                mru.add(pid);
+            }
+            
             lManager.grabLock(tid, page, perm);
-
             return page;
         } catch (Exception e) {
             System.out.println("Fail to load page from disk");
@@ -139,7 +147,7 @@ public class BufferPool {
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
-    public boolean holdsLock(TransactionId tid, PageId pid) {
+    public synchronized boolean holdsLock(TransactionId tid, PageId pid) {
         if (!pidToPage.containsKey(pid))
             return false;
         return pidToPage.get(pid).getPgLock().holdsLock(tid);
@@ -152,7 +160,7 @@ public class BufferPool {
      * @param tid    the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
      */
-    public void transactionComplete(TransactionId tid, boolean commit) {
+    public synchronized void transactionComplete(TransactionId tid, boolean commit) {
         if (!commit) {
             for (Entry<PageId, Page> entry : pidToPage.entrySet()) {
                 if (entry.getValue().isDirty() == tid) {
@@ -187,9 +195,11 @@ public class BufferPool {
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
-        for (Page pg : dirtyPages) {
-            pg.markDirty(true, tid);
-            pidToPage.put(pg.getId(), pg);
+        synchronized (this) {
+            for (Page pg : dirtyPages) {
+                pg.markDirty(true, tid);
+                pidToPage.put(pg.getId(), pg);
+            }
         }
     }
 
@@ -210,9 +220,11 @@ public class BufferPool {
             throws DbException, IOException, TransactionAbortedException {
         List<Page> dirtyPages = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId())
                 .deleteTuple(tid, t);
-        for (Page pg : dirtyPages) {
-            pg.markDirty(true, tid);
-            pidToPage.put(pg.getId(), pg);
+        synchronized (this) {
+            for (Page pg : dirtyPages) {
+                pg.markDirty(true, tid);
+                pidToPage.put(pg.getId(), pg);
+            }
         }
     }
 

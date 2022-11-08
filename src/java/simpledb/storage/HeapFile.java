@@ -93,7 +93,7 @@ public class HeapFile implements DbFile {
     }
 
     // see DbFile.java for javadocs
-    public Page readPage(PageId pid) throws IllegalArgumentException {
+    public Page readPage(PageId pid) {
         if (pid.getTableId() != getId())
             throw new IllegalArgumentException("page does not exist in this file");
 
@@ -104,9 +104,7 @@ public class HeapFile implements DbFile {
 
             return new HeapPage((HeapPageId) pid, data);
         } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(1);
-            return null;
+            throw new RuntimeException("Fail to read page from disk");
         }
     }
 
