@@ -26,7 +26,7 @@ import simpledb.transaction.TransactionId;
  */
 public class DeadLockHandler {
     private static final long INTERVAL = 10;
-    private static final long THRESHOLD = 500;
+    private static final long THRESHOLD = 100;
     private long lastUpdate;
     private long lastCheck;
     private final HashMap<TransactionId, Set<PageLock>> waitMap;
@@ -57,11 +57,20 @@ public class DeadLockHandler {
         waitMap.get(tid).add(lock);
     }
 
+    /**
+     * This dirty API is for lock manager commiting transactions. Ideally we should
+     * build a global thread pool to map transactions to threads and refactor the
+     * deadlock detector to only talk with individual page locks.
+     */
+    public synchronized void removeThread(TransactionId tid) {
+        lastUpdate = System.currentTimeMillis();
+        threadMap.remove(tid);
+    }
+
     /** It acts as a no-op if the transaction is not waiting on the lock. */
     public synchronized void unwait(TransactionId tid, PageLock lock) {
         lastUpdate = System.currentTimeMillis();
 
-        threadMap.remove(tid);
         if (waitMap.containsKey(tid))
             waitMap.get(tid).remove(lock);
     }
@@ -74,63 +83,81 @@ public class DeadLockHandler {
      */
     private synchronized void detectDeadLock() {
         /*
-         * Building wait-for graph and detect for all cycles can be rather expensive.
-         * Only do so after the wait-for graph has paused for a rather large time
-         * threshold.
+         * Building wait-for graph and detect for all cycles can be rather expensive as
+         * the nunmber of cycles grow exponentially. There, we only do so after the
+         * wait-for graph has paused for a rather large time threshold.
          */
         long now = System.currentTimeMillis();
         if (now - lastUpdate < THRESHOLD || now - lastCheck < THRESHOLD) {
             return;
         }
-        lastCheck = now;
 
-        Set<Set<TransactionId>> cycles = new HashSet<>();
+        Set<TransactionId> toAbort = new HashSet<>();
+        Set<TransactionId> seen = new HashSet<>();
 
-        /* Brute-force for all-simple-cycle-detection: simply run DFS on all nodes. */
+        /* Brute-force all-simple-cycle-detection: simply run DFS on all nodes. */
         for (TransactionId root : waitMap.keySet()) {
-            List<TransactionId> path = new ArrayList<>(Arrays.asList(root));
-            dfs(root, path, cycles);
-        }
+            if (!seen.contains(root)) {
+                seen.add(root);
+                List<TransactionId> path = new ArrayList<>(Arrays.asList(root));
+                Set<Set<TransactionId>> cycles = new HashSet<>();
+                dfs(root, seen, path, cycles);
 
-        // WAIT-WOUND: If cycles detected, abort the youngest transactions.
-        if (!cycles.isEmpty()) {
-            Set<TransactionId> toAbort = new HashSet<>();
+                // WAIT-WOUND: If cycles detected, abort the youngest transactions. The oldest
+                // transaction will never be aborted and thus keep the DB progressing.
+                if (!cycles.isEmpty()) {
 
-            // System.out.println(String.format("%d cycles detected.", cycles.size()));
-            for (Set<TransactionId> cycle : cycles) {
-                TransactionId t = null;
-                long mx = Long.MIN_VALUE;
-                for (TransactionId node : cycle) {
-                    if (node.getId() > mx) {
-                        mx = node.getId();
-                        t = node;
+                    for (Set<TransactionId> cycle : cycles) {
+                        TransactionId t = null;
+                        long mx = Long.MIN_VALUE;
+                        for (TransactionId node : cycle) {
+                            if (node.getId() > mx) {
+                                mx = node.getId();
+                                t = node;
+                            }
+                        }
+                        toAbort.add(t);
                     }
                 }
-                toAbort.add(t);
-            }
 
-            toAbort.forEach(tid -> abort(tid));
+                /* If all threads except the oldest one have to abort, can break early. */
+                if (toAbort.size() == threadMap.size() - 1) {
+                    break;
+                }
+            }
         }
+
+        if (toAbort.size() > 0) {
+            System.out.println(String.format("Abort %d transactions", toAbort.size()));
+        }
+        toAbort.forEach(tid -> abort(tid));
+        // Update time stamp here to avoid duplicated runs of cycle-detection.
+        lastCheck = System.currentTimeMillis();
     }
 
     /**
-     * Recursive Depth-First-Search.
+     * Recursive Depth-First-Search to find all simple-cycles starting with the
+     * root (start node).
      * 
      * @param node   The current node to visit.
+     * @param seen   The set of processed start nodes.
      * @param path   The current visiting path. The first element is the start.
-     * @param cycles Found cycles are added into this set.
+     * @param cycles Found cycles that start with the root.
      */
-    private void dfs(TransactionId node, List<TransactionId> path, Set<Set<TransactionId>> cycles) {
+    private void dfs(TransactionId node, Set<TransactionId> seen, List<TransactionId> path,
+            Set<Set<TransactionId>> cycles) {
         if (waitMap.containsKey(node)) {
             for (PageLock lock : waitMap.get(node)) {
                 for (TransactionId child : lock.getHolders()) {
+                    if (child == node)
+                        continue; // Ignore self-loop.
                     if (child == path.get(0) && path.size() > 1) {
                         cycles.add(new HashSet<>(path));
                         continue;
                     }
-                    if (!path.contains(child)) {
+                    if (!path.contains(child) && !seen.contains(child)) {
                         path.add(child);
-                        dfs(child, path, cycles);
+                        dfs(child, seen, path, cycles);
                         path.remove(child);
                     }
                 }
@@ -140,24 +167,30 @@ public class DeadLockHandler {
 
     /**
      * Abort a given transaction by sending an interruption to it. We only do so
-     * when the thread is confirmed waiting on certain lock, by a nasty hack.
+     * when the thread is waiting on certain lock, checked by a rather dirty hack.
      */
     private void abort(TransactionId tid) {
         /*
-         * Note(Qing): A hack protection against interrupting some random threads
+         * Note(Qing): A hacky protection against interrupting some random threads
          * that are not wating for locks, which may cause errors as InterruptedException
-         * would be caught somewhere else.
+         * would be caught somewhere else. Also, each transaction should only be aborted
+         * at most once.
          */
+        if (!threadMap.containsKey(tid))
+            return;
         StackTraceElement[] s = threadMap.get(tid).getStackTrace();
         boolean found = false;
         for (StackTraceElement elt : s) {
-            if (elt.getMethodName().contains("xLock") || elt.getMethodName().contains("sLock"))
+            if (elt.getMethodName().contains("xLock") || elt.getMethodName().contains("sLock")) {
                 found = true;
+                break;
+            }
         }
         if (!found)
             return;
 
         threadMap.get(tid).interrupt();
+        threadMap.remove(tid);
     }
 
 }

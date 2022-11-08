@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 
+import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.storage.HeapPageId;
 import simpledb.storage.PageId;
@@ -70,7 +71,7 @@ public class PageLockTest extends SimpleDbTestBase {
   @Test
   public void multipleSLocks() throws Exception {
     PageId pid = new HeapPageId(0, 0);
-    PageLock lock = new PageLock(pid);
+    PageLock lock = new PageLock(pid, Database.getBufferPool().getDLHandler());
     for (int i = 0; i < 3; i++) {
       TransactionId t = new TransactionId();
       grabLock(t, lock, Permissions.READ_ONLY, true);
@@ -80,7 +81,7 @@ public class PageLockTest extends SimpleDbTestBase {
   @Test
   public void multipleXLocks() throws Exception {
     PageId pid = new HeapPageId(0, 0);
-    PageLock lock = new PageLock(pid);
+    PageLock lock = new PageLock(pid, Database.getBufferPool().getDLHandler());
     TransactionId t0 = new TransactionId();
     grabLock(t0, lock, Permissions.READ_WRITE, true);
 
@@ -97,7 +98,7 @@ public class PageLockTest extends SimpleDbTestBase {
   @Test
   public void release() throws Exception {
     PageId pid = new HeapPageId(0, 0);
-    PageLock lock = new PageLock(pid);
+    PageLock lock = new PageLock(pid, Database.getBufferPool().getDLHandler());
     TransactionId t0 = new TransactionId();
     lock.xLock(t0);
     assertTrue(lock.holdsXLock(t0));

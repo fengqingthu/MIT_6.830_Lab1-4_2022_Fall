@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
@@ -51,6 +52,8 @@ public class LockManager {
     }
 
     public void releaseAll(TransactionId tid) {
+        Database.getBufferPool().getDLHandler().removeThread(tid);
+        
         if (lockMap.containsKey(tid)) {
             for (PageLock lock : lockMap.get(tid)) {
                 lock.releaseAll(tid);

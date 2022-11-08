@@ -88,6 +88,7 @@ public class PageLock {
             }
         } catch (InterruptedException e) {
             /* The deadlock handler may force this transaction to abort by interrupts. */
+            // System.out.println(String.format("%d aborted.", tid.getId()));
             synchronized (this) {
                 sPool.remove(ticket);
             }
@@ -124,6 +125,7 @@ public class PageLock {
             }
         } catch (InterruptedException e) {
             /* The deadlock handler may force this transaction to abort by interrupts. */
+            // System.out.println(String.format("%d aborted.", tid.getId()));
             synchronized (this) {
                 xQueue.remove(ticket);
             }
